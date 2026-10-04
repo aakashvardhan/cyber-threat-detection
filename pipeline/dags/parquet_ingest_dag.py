@@ -1,0 +1,152 @@
+import gc
+import os
+import time
+from datetime import datetime
+from airflow import DAG
+from airflow.providers.standard.operators.python import PythonOperator
+import clickhouse_connect
+from pyarrow.fs import S3FileSystem, FileType
+import polars as pl
+
+CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
+CH_PORT = int(os.getenv("CLICKHOUSE_PORT", 8123))
+CH_USER = os.getenv("CLICKHOUSE_USER", "admin")
+CH_PASS = os.getenv("CLICKHOUSE_PASSWORD", "password")
+
+def get_clickhouse_client():
+    client = clickhouse_connect.get_client(
+        host=CH_HOST, port=CH_PORT, username=CH_USER, password=CH_PASS,
+        send_receive_timeout=3600
+    )
+
+    client.set_client_setting("max_memory_usage", 0)
+    client.set_client_setting("async_insert", 0)
+    client.set_client_setting('max_insert_block_size', 50000)
+
+    return client
+
+BUCKET_NAME = os.getenv("BUCKET_NAME", "complete-uwf-dataset")
+OBJECT_KEY = os.getenv("OBJECT_KEY", "combined_uwf_dataset.parquet")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT_URL", "http://localhost:9000")
+
+def task_check_s3_file():
+    """Verify source Parquet file exists in S3/MinIO."""
+    fs_kwargs = {
+        "access_key": os.getenv("AWS_ACCESS_KEY_ID", "admin"),
+        "secret_key": os.getenv("AWS_SECRET_ACCESS_KEY", "password"),
+        "region": os.getenv("AWS_DEFAULT_REGION", "us-west-1"),
+    }
+    if S3_ENDPOINT:
+        clean_endpoint = S3_ENDPOINT.replace("http://", "").replace("https://", "")
+        fs_kwargs["endpoint_override"] = clean_endpoint
+        fs_kwargs["scheme"] = "http" if S3_ENDPOINT.startswith("http://") else "https"
+
+    s3_fs = S3FileSystem(**fs_kwargs)
+    file_path = f"{BUCKET_NAME}/{OBJECT_KEY}"
+    info = s3_fs.get_file_info(file_path)
+
+    if info.type == FileType.NotFound:
+        raise FileNotFoundError(f"Source file '{file_path}' does not exist in S3.")
+    print(f"File verified: '{file_path}' | Size: {info.size:,} bytes")
+
+def task_init_schema():
+    """Auto-create ClickHouse target table schema if it does not exist."""
+    client = get_clickhouse_client()
+
+    # Generate S3 function URL for schema inference
+    s3_user = os.getenv("AWS_ACCESS_KEY_ID", "admin")
+    s3_pass = os.getenv("AWS_SECRET_ACCESS_KEY", "password")
+    s3_url = f"{S3_ENDPOINT}/{BUCKET_NAME}/{OBJECT_KEY}"
+
+    sql = f"""
+    CREATE OR REPLACE TABLE default.logs_data
+    ENGINE = MergeTree()
+    ORDER BY tuple()
+    EMPTY AS 
+    SELECT * FROM s3('{s3_url}', '{s3_user}', '{s3_pass}', 'Parquet');
+    """
+    client.command(sql)
+    print("Table 'default.logs_data' schema initialized.")
+
+def task_stream_ingest():
+    """Stream Parquet batches from S3 into ClickHouse to maintain low RAM usage."""
+    client = get_clickhouse_client()
+
+    fs_kwargs = {
+        "access_key": os.getenv("AWS_ACCESS_KEY_ID", "admin"),
+        "secret_key": os.getenv("AWS_SECRET_ACCESS_KEY", "password"),
+        "region": os.getenv("AWS_DEFAULT_REGION", "us-west-1"),
+    }
+
+    storage_options = {
+        "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID", "admin"),
+        "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY", "password"),
+        "aws_endpoint_url": S3_ENDPOINT,
+        "aws_region": os.getenv("AWS_DEFAULT_REGION", "us-west-1"),
+        "aws_allow_http": "true",  # Required for http:// MinIO endpoints
+    }
+
+    s3_url = f"s3://{BUCKET_NAME}/{OBJECT_KEY}"
+
+    lf = pl.scan_parquet(s3_url, storage_options=storage_options)
+
+    total_rows = lf.select(pl.len()).collect().item()
+    print(f"Dataset contains {total_rows:,} total records.")
+
+    BATCH_SIZE = 250_000
+    rows_inserted = 0
+    start_time = time.time()
+
+    for offset in range(0, total_rows, BATCH_SIZE):
+        # Fetch slice lazily; Polars decodes only the row groups needed for this offset
+        df_chunk = lf.slice(offset, BATCH_SIZE).collect()
+        
+        # Convert chunk to PyArrow table for zero-copy streaming into ClickHouse
+        arrow_table = df_chunk.to_arrow()
+        client.insert_arrow("default.logs_data", arrow_table)
+        
+        rows_inserted += len(df_chunk)
+        print(f"Ingested {rows_inserted:,} / {total_rows:,} rows ({(rows_inserted/total_rows)*100:.1f}%)")
+
+        # Clean up memory buffers immediately
+        del df_chunk, arrow_table
+        gc.collect()
+
+    print(f"Polars streaming ingestion finished in {time.time() - start_time:.2f} seconds.")
+
+def task_validate():
+    """Validate total row count in ClickHouse."""
+    client = get_clickhouse_client()
+    count = client.command("SELECT count() FROM default.logs_data")
+    print(f"Ingestion check successful. Total records in default.logs_data: {count:,}")
+
+# DAG Definition
+with DAG(
+    dag_id="manual_s3_to_clickhouse_ingestion",
+    start_date=datetime(2026, 10, 3),
+    schedule=None,
+    catchup=False,
+    max_active_runs=1,
+) as dag:
+
+    check_s3 = PythonOperator(
+        task_id="check_s3_file",
+        python_callable=task_check_s3_file,
+    )
+
+    init_schema = PythonOperator(
+        task_id="initialize_clickhouse_schema",
+        python_callable=task_init_schema,
+    )
+
+    stream_ingest = PythonOperator(
+        task_id="stream_parquet_to_clickhouse",
+        python_callable=task_stream_ingest,
+    )
+
+    validate = PythonOperator(
+        task_id="validate_ingestion",
+        python_callable=task_validate,
+    )
+
+    check_s3 >> init_schema >> stream_ingest >> validate
