@@ -1,0 +1,8 @@
+dataset,n,n_attack,unusable,recall,fpr,roc_auc,test_prevalence,precision_at_prevalence,f1_at_prevalence,technique_acc
+UWF-ZeekData22,109,9,0,1.0,0.98,0.4417,0.0005,0.0005,0.0011,
+UWF-ZeekData24,200,100,0,0.87,0.8,0.6634,0.614,0.6337,0.7333,0.0
+UWF-ZeekDataFall22,147,47,0,0.8723,0.89,0.3167,0.0168,0.0165,0.0324,0.0
+UWF-ZeekDataFall24-2,106,6,0,1.0,0.92,0.4958,0.0004,0.0004,0.0009,0.0
+UWF-ZeekDataSum25-1,143,43,0,0.3953,1.0,0.105,0.0028,0.0011,0.0022,0.0
+UWF-ZeekDataSum25-2,101,1,0,1.0,0.94,0.625,0.0002,0.0002,0.0004,0.0
+ALL,806,206,0,0.7816,0.9217,0.3918,0.1102,0.0951,0.1695,0.0
