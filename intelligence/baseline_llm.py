@@ -14,7 +14,7 @@ other text-based models, so only the model differs. Queries an OpenAI-compatible
 
 Predictions are appended to a .jsonl file, so an interrupted run resumes where it stopped.
 """
-import argparse, json, os, sys, time, urllib.error, urllib.request
+import argparse, json, os, re, sys, time, urllib.error, urllib.request
 from pathlib import Path
 
 import pandas as pd
@@ -55,26 +55,28 @@ def pick_examples(train, k, seed):
     return [r for _, r in ex.sample(frac=1, random_state=seed).iterrows()]
 
 
-def ask(base_url, model, prompt):
+def ask(base_url, model, prompt, key_env="LLM_API_KEY"):
     body = {"model": model, "temperature": 0, "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}]}
     req = urllib.request.Request(f"{base_url}/chat/completions", json.dumps(body).encode(),
                                  {"Content-Type": "application/json", "User-Agent": "baseline-llm/1.0",   # default urllib UA is blocked by Cloudflare (Groq)
-                                  "Authorization": f"Bearer {os.environ.get('LLM_API_KEY', 'none')}"})
+                                  "Authorization": f"Bearer {os.environ.get(key_env, 'none')}"})
     for attempt in range(6):   # retry rate limits (429) and transient server errors with backoff
         try:
             with urllib.request.urlopen(req, timeout=300) as resp:
                 return json.load(resp)["choices"][0]["message"]["content"]
         except urllib.error.HTTPError as e:
-            if e.code not in (429, 500, 502, 503) or attempt == 5:
+            if e.code == 400 and attempt >= 2:   # e.g. JSON mode rejecting the model's output: log as unparseable
+                return f"[HTTP 400] {e.read().decode(errors='replace')[:300]}"
+            if e.code not in (400, 429, 500, 502, 503) or attempt == 5:
                 raise
             time.sleep(float(e.headers.get("Retry-After") or 2 ** attempt))
 
 
 def metrics(p, prevalence):
-    # p: rows with y, pred (None = unparseable, counted as "normal"), technique, true_techniques (list).
+    # p: rows with y, pred (None = unparseable, counted as "attack": a missed attack costs more than a false alarm), technique, true_techniques (list).
     # Sample is class-balanced, so precision is re-weighted to the test split's true prevalence.
-    y, yhat = p.y.to_numpy(), p.pred.fillna(0).to_numpy()
+    y, yhat = p.y.to_numpy(), p.pred.fillna(1).to_numpy()
     tpr = (yhat[y == 1] == 1).mean() if (y == 1).any() else float("nan")
     fpr = (yhat[y == 0] == 1).mean() if (y == 0).any() else float("nan")
     d = tpr * prevalence + fpr * (1 - prevalence)
@@ -98,6 +100,7 @@ def main():
     a.add_argument("--no-ips", action="store_true", help="hide IPs in prompts (removes the host-identity shortcut)")
     a.add_argument("--model", default="qwen2.5:7b-instruct")
     a.add_argument("--base-url", default="http://localhost:11434/v1")
+    a.add_argument("--api-key-env", default="LLM_API_KEY", help="name of the env var / .env entry holding the API key")
     a.add_argument("--seed", type=int, default=42)
     a.add_argument("--out", default=None)
     args = a.parse_args()
@@ -116,8 +119,8 @@ def main():
         for i, (idx, r) in enumerate(sample.iterrows()):
             if idx in done:
                 continue
-            raw = ask(args.base_url, args.model, build_prompt(r, shots, include_ips=not args.no_ips))
-            pred, tech = parse_answer(raw)
+            raw = ask(args.base_url, args.model, build_prompt(r, shots, include_ips=not args.no_ips), args.api_key_env)
+            pred, tech = parse_answer(re.sub(r"<thought>.*?</thought>", "", raw, flags=re.S))   # drop reasoning dump; raw stays logged
             f.write(json.dumps(dict(edge_idx=int(idx), y=int(r.binary_target), pred=pred, technique=tech,
                                     true_techniques=list(r.mitre_targets) if r.mitre_targets is not None else [],
                                     raw=raw)) + "\n")

@@ -14,13 +14,13 @@ def test_parse_answer():
 def test_metrics():
     p = pd.DataFrame(dict(
         y=[1, 1, 0, 0],
-        pred=[1, None, 1, 0],          # unparseable answer counts as "normal"
+        pred=[1, None, 1, 0],          # unparseable answer counts as "attack"
         technique=["T1595.001", None, None, None],
         true_techniques=[["T1595"], ["T1046"], [], []]))
     m = metrics(p, 0.1)
-    assert (m.recall, m.fpr, m.unusable) == (0.5, 0.5, 1)
+    assert (m.recall, m.fpr, m.unusable) == (1.0, 0.5, 1)
     assert m.technique_acc == 1.0                       # sub-technique matched on parent ID
-    assert abs(m.precision_at_prevalence - 0.1) < 1e-4  # 0.05 / (0.05 + 0.45)
+    assert abs(m.precision_at_prevalence - 0.1 / 0.55) < 1e-4  # 0.1 / (0.1 + 0.45)
 
 
 def test_pick_examples():
