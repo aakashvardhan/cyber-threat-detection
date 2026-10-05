@@ -78,13 +78,13 @@ x-airflow-common:
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
     CLICKHOUSE_HOST: clickhouse
     CLICKHOUSE_PORT: 8123
-    CLICKHOUSE_USER: admin
-    CLICKHOUSE_PASSWORD: password
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     S3_ENDPOINT_URL: http://minio:9000
     AWS_ACCESS_KEY_ID: admin
     AWS_SECRET_ACCESS_KEY: password
-    BUCKET_NAME: complete-uwf-dataset
-    OBJECT_KEY: combined_uwf_dataset.parquet
+    BUCKET_NAME: ${BUCKET_NAME}
+    OBJECT_KEY: ${OBJECT_KEY}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs

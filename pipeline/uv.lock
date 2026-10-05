@@ -1989,6 +1989,7 @@ dependencies = [
     { name = "clickhouse-connect" },
     { name = "polars" },
     { name = "pyarrow" },
+    { name = "python-dotenv" },
 ]
 
 [package.metadata]
@@ -1997,6 +1998,7 @@ requires-dist = [
     { name = "clickhouse-connect", specifier = ">=1.9.0" },
     { name = "polars", specifier = ">=1.44.2" },
     { name = "pyarrow", specifier = ">=25.0.1" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
 ]
 
 [[package]]

@@ -7,6 +7,9 @@ from airflow.providers.standard.operators.python import PythonOperator
 import clickhouse_connect
 from pyarrow.fs import S3FileSystem, FileType
 import polars as pl
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
 CH_PORT = int(os.getenv("CLICKHOUSE_PORT", 8123))
@@ -15,7 +18,10 @@ CH_PASS = os.getenv("CLICKHOUSE_PASSWORD", "password")
 
 def get_clickhouse_client():
     client = clickhouse_connect.get_client(
-        host=CH_HOST, port=CH_PORT, username=CH_USER, password=CH_PASS,
+        host=CH_HOST,
+        port=CH_PORT,
+        username=CH_USER,
+        password=CH_PASS,
         send_receive_timeout=3600
     )
 
@@ -25,9 +31,9 @@ def get_clickhouse_client():
 
     return client
 
-BUCKET_NAME = os.getenv("BUCKET_NAME", "complete-uwf-dataset")
-OBJECT_KEY = os.getenv("OBJECT_KEY", "combined_uwf_dataset.parquet")
-S3_ENDPOINT = os.getenv("S3_ENDPOINT_URL", "http://localhost:9000")
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+OBJECT_KEY = os.getenv("OBJECT_KEY")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT_URL")
 
 def task_check_s3_file():
     """Verify source Parquet file exists in S3/MinIO."""
@@ -83,7 +89,7 @@ def task_stream_ingest():
         "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY", "password"),
         "aws_endpoint_url": S3_ENDPOINT,
         "aws_region": os.getenv("AWS_DEFAULT_REGION", "us-west-1"),
-        "aws_allow_http": "true",  # Required for http:// MinIO endpoints
+        "aws_allow_http": "true",
     }
 
     s3_url = f"s3://{BUCKET_NAME}/{OBJECT_KEY}"
@@ -93,7 +99,7 @@ def task_stream_ingest():
     total_rows = lf.select(pl.len()).collect().item()
     print(f"Dataset contains {total_rows:,} total records.")
 
-    BATCH_SIZE = 250_000
+    BATCH_SIZE = 200_000
     rows_inserted = 0
     start_time = time.time()
 
