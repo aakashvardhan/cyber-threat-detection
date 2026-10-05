@@ -8,8 +8,25 @@ import clickhouse_connect
 from pyarrow.fs import S3FileSystem, FileType
 import polars as pl
 from dotenv import load_dotenv
+import boto3
 
 load_dotenv()
+
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+OBJECT_KEY = os.getenv("OBJECT_KEY")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT_URL")
+AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-1")
+
+def get_s3_storage_options():
+    session = boto3.Session(region_name=AWS_REGION)
+    credentials = session.get_credentials().get_frozen_credentials()
+
+    return {
+        "aws_access_key_id": credentials.access_key,
+        "aws_secret_access_key": credentials.secret_key,
+        "aws_session_token": credentials.token,
+        "aws_region": AWS_REGION,
+    }
 
 CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
 CH_PORT = int(os.getenv("CLICKHOUSE_PORT", 8123))
@@ -31,29 +48,19 @@ def get_clickhouse_client():
 
     return client
 
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-OBJECT_KEY = os.getenv("OBJECT_KEY")
-S3_ENDPOINT = os.getenv("S3_ENDPOINT_URL")
-
 def task_check_s3_file():
     """Verify source Parquet file exists in S3/MinIO."""
-    fs_kwargs = {
-        "access_key": os.getenv("AWS_ACCESS_KEY_ID", "admin"),
-        "secret_key": os.getenv("AWS_SECRET_ACCESS_KEY", "password"),
-        "region": os.getenv("AWS_DEFAULT_REGION", "us-west-1"),
-    }
-    if S3_ENDPOINT:
-        clean_endpoint = S3_ENDPOINT.replace("http://", "").replace("https://", "")
-        fs_kwargs["endpoint_override"] = clean_endpoint
-        fs_kwargs["scheme"] = "http" if S3_ENDPOINT.startswith("http://") else "https"
+    storage_options = get_s3_storage_options()
 
-    s3_fs = S3FileSystem(**fs_kwargs)
-    file_path = f"{BUCKET_NAME}/{OBJECT_KEY}"
-    info = s3_fs.get_file_info(file_path)
+    s3_url = f's3://{BUCKET_NAME}/{OBJECT_KEY}'
 
-    if info.type == FileType.NotFound:
-        raise FileNotFoundError(f"Source file '{file_path}' does not exist in S3.")
-    print(f"File verified: '{file_path}' | Size: {info.size:,} bytes")
+    print(f"Scanning S3 file at {s3_url} via Polars...")
+    lf = pl.scan_parquet(s3_url, storage_options=storage_options)
+
+    total_rows = lf.select(pl.len()).collect().item()
+    print(
+        f"Successfully connected to S3! File contains {total_rows:,} records."
+    )
 
 def task_init_schema():
     """Auto-create ClickHouse target table schema if it does not exist."""

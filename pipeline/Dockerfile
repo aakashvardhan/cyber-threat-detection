@@ -5,4 +5,5 @@ RUN pip install --no-cache-dir \
 	clickhouse-connect \
 	polars \
 	pyarrow \
-	python-dotenv
+	python-dotenv \
+	boto3
