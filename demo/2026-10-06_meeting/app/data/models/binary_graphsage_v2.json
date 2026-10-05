@@ -1,0 +1,15 @@
+{
+  "best_epoch": 1,
+  "positive_weight": 13.882645865465657,
+  "validation_pr_auc": 0.5661,
+  "validation_threshold": 0.8609,
+  "test_pr_auc": 0.7393193708544149,
+  "test_roc_auc": 0.9916013902649657,
+  "test_precision": 0.5658073270013568,
+  "test_recall": 0.8705636743215032,
+  "test_f1": 0.6858552631578947,
+  "true_positives": 834,
+  "false_positives": 640,
+  "false_negatives": 124,
+  "true_negatives": 230490
+}
