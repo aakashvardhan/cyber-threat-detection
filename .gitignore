@@ -1,1 +1,9 @@
 CLAUDE.md
+
+# Python
+.venv/
+__pycache__/
+
+# Airflow
+logs/
+plugins/
