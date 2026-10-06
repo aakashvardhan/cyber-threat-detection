@@ -5,3 +5,11 @@ data/uwf_graph_v2/
 __pycache__/
 
 .env
+
+# Python
+.venv/
+__pycache__/
+
+# Airflow
+logs/
+plugins/
