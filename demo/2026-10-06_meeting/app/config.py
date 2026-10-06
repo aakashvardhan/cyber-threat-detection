@@ -65,3 +65,9 @@ def missing_artifacts() -> list[str]:
         RAG_PROCEDURE_CHUNKS,
     ]
     return [str(path.relative_to(APP_DIR)) for path in checks if not path.exists()]
+
+
+# Gemma 4 prompting page (saved zero/few-shot runs + optional live call)
+LLM_EVAL_DIR = DATA_DIR / "llm_eval"
+GEMMA_MODEL = "gemma-4-31b-it"
+GEMMA_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
