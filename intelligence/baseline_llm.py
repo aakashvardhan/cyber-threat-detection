@@ -17,6 +17,7 @@ Predictions are appended to a .jsonl file, so an interrupted run resumes where i
 import argparse, json, os, re, sys, time, urllib.error, urllib.request
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent   # repo root, so defaults work from any cwd
@@ -45,14 +46,21 @@ def parent(code):
     return code.split(".")[0] if isinstance(code, str) else None
 
 
-def pick_examples(train, k, seed):
-    # k attack rows (one per most common technique) + k normal rows, shuffled.
-    att = train[train.binary_target == 1]
-    tech = att.mitre_targets.map(first_mitre)
-    top = tech.value_counts().index[:k]
-    ex = pd.concat([att[tech == t].sample(1, random_state=seed) for t in top]
-                   + [train[train.binary_target == 0].sample(k, random_state=seed)])
-    return [r for _, r in ex.sample(frac=1, random_state=seed).iterrows()]
+def pick_examples(pool, k, seed):
+    # k attack + k normal rows from `pool`, shuffled. Attack techniques are drawn in proportion to
+    # their frequency in the pool (so the shots mirror the attack mix instead of the most common
+    # technique only); attacks with no technique are skipped. Same seed -> same shots.
+    rng = np.random.RandomState(seed)
+    att = pool[pool.binary_target == 1].assign(tech=lambda d: d.mitre_targets.map(first_mitre))
+    att = att[att.tech.notna()]
+    freq = att.tech.value_counts(normalize=True)
+    rows = []
+    for t in rng.choice(freq.index, size=k, p=freq.values):
+        cand = att[(att.tech == t) & ~att.index.isin([r.name for r in rows])]
+        rows.append(cand.iloc[rng.randint(len(cand))])
+    norm = pool[pool.binary_target == 0]
+    rows += [norm.iloc[i] for i in rng.choice(len(norm), size=k, replace=False)]
+    return [rows[i] for i in rng.permutation(len(rows))]
 
 
 def ask(base_url, model, prompt, key_env="LLM_API_KEY"):
@@ -95,7 +103,10 @@ def main():
     a.add_argument("--data", default=ROOT.parent / "gnn_edge_data")
     a.add_argument("--split", choices=["validation", "test"], default="test")
     a.add_argument("--mode", choices=["zero", "few"], default="zero")
-    a.add_argument("--k", type=int, default=4, help="few-shot: k attack (top-k techniques) + k normal examples")
+    a.add_argument("--k", type=int, default=4, help="few-shot: k attack + k normal examples")
+    a.add_argument("--shot-split", choices=["train", "validation"], default="validation",
+                   help="few-shot: split the examples are drawn from (never the evaluated split)")
+    a.add_argument("--shot-seed", type=int, default=42, help="few-shot: seed for the example draw (independent of --seed)")
     a.add_argument("--n", type=int, default=200, help="edges per class to evaluate")
     a.add_argument("--no-ips", action="store_true", help="hide IPs in prompts (removes the host-identity shortcut)")
     a.add_argument("--model", default="qwen2.5:7b-instruct")
@@ -105,7 +116,8 @@ def main():
     a.add_argument("--out", default=None)
     args = a.parse_args()
     ips = "noip" if args.no_ips else "ip"
-    out = Path(args.out or ROOT / f"evaluation/model_b/{args.mode}_{ips}_{args.model.replace(':', '-').replace('/', '-')}.jsonl")
+    tag = f"few{args.k}-{args.shot_split}-s{args.shot_seed}" if args.mode == "few" else "zero"
+    out = Path(args.out or ROOT / f"evaluation/model_b/{tag}_{ips}_{args.model.replace(':', '-').replace('/', '-')}.jsonl")
     out.parent.mkdir(parents=True, exist_ok=True)
 
     evals = load(args.data, args.split)
@@ -113,7 +125,10 @@ def main():
     sample = evals.sample(frac=1, random_state=args.seed).groupby("binary_target").head(args.n)
     print(sample.binary_target.value_counts().to_string(), "\n")
 
-    shots = pick_examples(load(args.data, "train"), args.k, args.seed) if args.mode == "few" else None
+    shots = pick_examples(load(args.data, args.shot_split), args.k, args.shot_seed) if args.mode == "few" else None
+    if shots:   # log which examples were shown, for reproducibility
+        out.with_suffix(".shots.json").write_text(json.dumps(
+            [dict(edge_idx=int(r.name), y=int(r.binary_target), technique=first_mitre(r.mitre_targets)) for r in shots]))
     done = {json.loads(l)["edge_idx"] for l in out.open()} if out.exists() else set()
     with out.open("a") as f:
         for i, (idx, r) in enumerate(sample.iterrows()):

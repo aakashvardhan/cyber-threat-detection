@@ -24,9 +24,12 @@ def test_metrics():
 
 
 def test_pick_examples():
-    train = pd.DataFrame(dict(
-        binary_target=[1, 1, 1, 0, 0, 0, 0],
-        mitre_targets=[np.array(["T1"]), np.array(["T1"]), np.array(["T2"]), None, None, None, None]))
-    ex = pick_examples(train, 2, 0)
-    assert sorted(int(r.binary_target) for r in ex) == [0, 0, 1, 1]
-    assert {first_mitre(r.mitre_targets) for r in ex if r.binary_target} == {"T1", "T2"}
+    pool = pd.DataFrame(dict(
+        binary_target=[1] * 6 + [0] * 6,
+        mitre_targets=[np.array(["T1"])] * 4 + [np.array(["T2"]), None] + [None] * 6))
+    ex = pick_examples(pool, 3, 0)
+    assert sorted(int(r.binary_target) for r in ex) == [0, 0, 0, 1, 1, 1]
+    assert all(first_mitre(r.mitre_targets) in ("T1", "T2") for r in ex if r.binary_target)   # no technique-less attacks
+    assert len({r.name for r in ex}) == 6                                                    # no duplicate rows
+    assert [r.name for r in ex] == [r.name for r in pick_examples(pool, 3, 0)]              # reproducible
+    assert [r.name for r in ex] != [r.name for r in pick_examples(pool, 3, 1)]              # seed changes the draw
