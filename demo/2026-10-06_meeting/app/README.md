@@ -62,11 +62,11 @@ data/
 
 `pages/1_Gemma4_Prompting.py` appears in the sidebar of the running app. It shows, for any of the 400 evaluated test edges:
 
-- the event being classified (JSON event layout: `event_id`, `row_id`, `event.traffic_features`) and, for few-shot, how many labelled examples the prompt carries,
-- the saved Gemma 4 reply, parsed verdict, MITRE technique, and ground truth,
+- a summary strip for the edge being classified and, for few-shot, how many labelled examples the prompt carries (neither the prompt, the examples, nor the event JSON is displayed),
+- the saved Gemma 4 verdict, MITRE technique, and ground truth,
 - a **Compare runs** tab with recall, false-positive rate, projected precision and F1, and technique accuracy for zero-shot and three few-shot example draws, next to GraphSAGE.
 
-Saved results live in `data/llm_eval/` (the final answers only; the model's reasoning is not stored or shown). Replay needs no key and no prompt configuration.
+Saved results live in `data/llm_eval/` (the final answers only; the model's reasoning and raw answer text are not shown). Replay needs no key and no prompt configuration.
 
 **Private prompt configuration.** The prompt wording and the few-shot examples are not in this repository. Live calls need them, loaded at run time from the first of:
 

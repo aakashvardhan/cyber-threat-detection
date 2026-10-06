@@ -166,9 +166,8 @@ def _prompt_view(run: str, edge_idx: int) -> None:
                    "then the event below. The examples are not shown in this demo.")
     else:
         st.caption("The prompt starts with labelled examples, then the event below. The examples are not shown in this demo.")
-    st.markdown('<div class="eyebrow">Event to classify</div>', unsafe_allow_html=True)
-    st.code(replay.target_event_text(edge_idx), language="json")
-    st.caption("The GNN's output and the ground truth are never part of the prompt.")
+    st.caption("The edge summarised above is sent to the model as a structured event. "
+               "The GNN's output and the ground truth are never part of the prompt.")
 
 
 def _result_card(reply: replay.Reply, *, live: bool = False) -> None:
@@ -193,14 +192,12 @@ def _result_card(reply: replay.Reply, *, live: bool = False) -> None:
 </div>""",
         unsafe_allow_html=True,
     )
-    with st.expander("Model answer"):
-        st.code(reply.answer or "(empty)", language="json")
 
 
 def _saved_result(run: str, edge_idx: int) -> None:
     st.markdown('<div class="eyebrow">Saved result</div>', unsafe_allow_html=True)
     st.markdown(_pill("Earlier plain-text prompt", "warn", "!") +
-                ' <span style="color:var(--muted);font-size:.82rem">this reply was not produced by the JSON prompt above</span>',
+                ' <span style="color:var(--muted);font-size:.82rem">this reply came from an earlier prompt format, so a live run may differ</span>',
                 unsafe_allow_html=True)
     _result_card(replay.load_run(run)[edge_idx])
 
