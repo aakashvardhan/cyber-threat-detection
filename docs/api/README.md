@@ -2,7 +2,7 @@
 
 `openapi.yaml` is the single source of truth for the API between the React analyst console (`frontend/`) and the FastAPI backend (`backend/`).
 
-Current version: **v0.4** — 4 endpoints + 1 optional.
+Current version: **v0.4.1**: 4 endpoints + 1 optional. Every request sends the shared demo key in the `X-API-Key` header.
 
 | # | Endpoint | Purpose | Computed |
 |---|---|---|---|
