@@ -1,0 +1,31 @@
+{
+  "primary_model": "model_1",
+  "primary_reason": "Default bundle until the evaluation notebook exports metrics.json; only verified numbers are filled in.",
+  "test_edges": 726307,
+  "models": [
+    {
+      "model": "model_1",
+      "description": "GraphSAGE edge classifier. Leave-one-recording-out (6 folds, every edge tested once), pooled, seed 42.",
+      "detection": {"precision": 0.7705, "recall": 0.8265, "macro_f1": null, "pr_auc": 0.8881, "roc_auc": null},
+      "technique": null,
+      "retrieval": null,
+      "explanation": null,
+      "calibration": null,
+      "label_sparsity": null
+    },
+    {
+      "model": "model_2",
+      "description": "Gemma 4 31B zero-shot prompting on a balanced sample of 400 test edges (200 attack, 200 normal); precision projected to the 0.41% test prevalence. Technique accuracy on 134 detected attacks.",
+      "detection": {"precision": 0.008, "recall": 0.67, "macro_f1": null, "pr_auc": null, "roc_auc": null},
+      "technique": {"accuracy": 0.216, "macro_f1": null, "top3_accuracy": null, "top5_accuracy": null, "tactic_accuracy": null},
+      "retrieval": null,
+      "explanation": null,
+      "calibration": null,
+      "label_sparsity": null
+    },
+    {"model": "model_3", "description": "Fine-tuned LLM (pending).", "detection": null, "technique": null, "retrieval": null, "explanation": null, "calibration": null, "label_sparsity": null},
+    {"model": "model_4", "description": "Fine-tuned LLM with RAG explanations (pending).", "detection": null, "technique": null, "retrieval": null, "explanation": null, "calibration": null, "label_sparsity": null},
+    {"model": "model_5", "description": "Calibrated decision model: attack, technique and severity (pending).", "detection": null, "technique": null, "retrieval": null, "explanation": null, "calibration": null, "label_sparsity": null}
+  ],
+  "rag_ablation": []
+}

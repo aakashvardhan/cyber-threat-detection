@@ -1,0 +1,4 @@
+# model artifacts and replay data are shared via Drive, not committed
+*
+!.gitignore
+!README.md
