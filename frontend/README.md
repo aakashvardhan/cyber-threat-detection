@@ -2,7 +2,7 @@
 
 React app for the analyst console (SJSU-114, under SJSU-112 Frontend–backend integration). Built from UI design v1.1 (scheme A, Midnight Ops) and API contract v0.4.1 (`docs/api/openapi.yaml`). It talks to the FastAPI backend in `backend/` (SJSU-115).
 
-Stack: Node.js, Vite, React 19, React Router, plain CSS. JavaScript, no TypeScript.
+Stack: Node.js, Vite, React 19, React Router, plain CSS, Playwright for end-to-end tests. JavaScript, no TypeScript.
 
 ## Run
 
@@ -33,6 +33,20 @@ Port 5173 is already allowed in the backend's `CORS_ORIGINS`.
 | Incident detail | `/incidents/:id` | Built. Triage, Response and Research tabs, status workflow, technique override, notes |
 | Reports, Evaluation, Knowledge base | `/reports`, `/evaluation`, `/knowledge-base` | Placeholder, next round |
 
+## End-to-end tests
+
+`e2e/console.spec.js` runs the real frontend against the real backend in a browser (Playwright). It covers the checklist for SJSU-112 "Connect and test end to end": loading, Step and Play/Pause, the update banner, incident detail and the evidence funnel, confirming, mitigations and notes, reopening, jumping, a down backend and a wrong API key.
+
+**It restarts the backend replay**, which clears the backend's incidents. Don't run it against a shared demo server.
+
+```bash
+npx playwright install chromium   # once
+# start the backend first, then:
+npm run test:e2e
+```
+
+The frontend dev server is started for you if it isn't running. The API key comes from `.env.local`. A report is written to `playwright-report/`.
+
 ## How it works
 
 - **Replay** (`src/state/ReplayContext.jsx`): the browser drives the replay. Each tick calls `POST /detect`, then `GET /incidents`. Default speed is one window every 5 seconds. The replay keeps running while you move between pages.
@@ -59,4 +73,5 @@ Colors live only in `tokens.css`. To change a color, change it there.
 
 - "Compared with normal traffic" and connection states (REJ, SF) from the design need fields the API does not return yet, so the Traffic panel shows connections, bytes and protocol only.
 - `GET /incidents` returns every incident and window on each tick. It gets slower as the replay goes on (about 1 MB after 2,400 windows). A `since` parameter on the backend would fix this.
+- The test split has gaps, so not every day has a window at 00:00. **Jump to** shows a message when it hits one. The backend could snap to the next recorded window instead.
 - Service and port show "—" with the Oct 6 demo data, which has no service column.

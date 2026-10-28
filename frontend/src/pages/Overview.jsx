@@ -7,7 +7,7 @@ import { useReplay } from '../state/ReplayContext.jsx';
 import { hhmm, num, pct, plural, sameDay, shortDate } from '../utils/format.js';
 import { byPriority, hasSeverity, isOpen, isUrgent, URGENT_PROBABILITY, techniqueOf } from '../utils/incidents.js';
 
-const RECENT_WINDOWS = 72; // 6 hours of 5-minute windows
+const RECENT_MS = 6 * 3600 * 1000; // the Traffic panel shows the 6 hours before the replay clock
 
 export default function Overview() {
   const { data, incidents, error, refresh, clearError } = useReplay();
@@ -33,7 +33,11 @@ export default function Overview() {
     return {
       events, attack, normal: events - attack, open, awaiting, urgent, tech,
       needsReview: [...awaiting].sort(byPriority).slice(0, 6),
-      recent: windows.slice(-RECENT_WINDOWS),
+      recent: (() => {
+        // Only windows in the 6 hours before the clock. After a jump, older windows from other days are left out.
+        const now = data?.replay?.window_start ? new Date(data.replay.window_start).getTime() : 0;
+        return windows.filter((w) => { const t = new Date(w.window_start).getTime(); return t <= now && t > now - RECENT_MS; });
+      })(),
       rated: hasSeverity(incidents),
     };
   }, [data, incidents]);
@@ -142,7 +146,7 @@ function TrafficPanel({ windows }) {
   const maxN = Math.max(1, ...windows.map((w) => w.events - w.attack_edges));
   const maxA = Math.max(1, ...windows.map((w) => w.attack_edges));
   const avgN = windows.length ? Math.round(windows.reduce((s, w) => s + w.events - w.attack_edges, 0) / windows.length) : 0;
-  const ticks = windows.length ? [0, Math.floor(windows.length / 3), Math.floor((2 * windows.length) / 3), windows.length - 1] : [];
+  const ticks = windows.length ? [...new Set([0, Math.floor(windows.length / 3), Math.floor((2 * windows.length) / 3), windows.length - 1])] : [];
 
   return (
     <section className="panel">

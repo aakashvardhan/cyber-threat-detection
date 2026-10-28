@@ -11,6 +11,8 @@ export default function EvidenceFunnel({ trace, explanation, evidenceCount }) {
   const sentences = explanation?.sentences || [];
   const cited = sentences.filter((s) => s.citations?.length).length;
   const generating = explanation?.status === 'generating';
+  // e.g. "1 MITRE + 5 Procedures", so the total adds up visibly
+  const kept = sources.filter((s) => s.returned > 0).map((s) => `${s.returned} ${SOURCE_LABEL[s.source] || s.source}`).join(' + ');
 
   return (
     <div role="group" aria-label="How the evidence was found" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -38,9 +40,8 @@ export default function EvidenceFunnel({ trace, explanation, evidenceCount }) {
       <div className="funnel-step">
         <span className="funnel-title">3. Rank</span>
         <span className="funnel-big">{num(evidenceCount)}</span>
-        <span className="small muted">
-          sources kept (top {trace.top_k ?? '—'}{trace.min_score != null ? `, score ≥ ${trace.min_score}` : ''})
-        </span>
+        <span className="small muted">sources kept: {kept || 'none'}</span>
+        <span className="small muted">Technique page plus the best {trace.top_k ?? '—'} others{trace.min_score != null ? `, score ≥ ${trace.min_score}` : ''}</span>
         <span className={`small ${trace.fallback_to_tactic ? 'warn-text' : 'muted'}`}>
           {trace.fallback_to_tactic ? 'Fell back to tactic-level evidence' : 'Technique-level match, no fallback'}
         </span>

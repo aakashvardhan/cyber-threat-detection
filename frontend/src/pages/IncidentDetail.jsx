@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { ErrorNote, SeverityChip } from '../components/badges.jsx';
 import EvidenceFunnel from '../components/EvidenceFunnel.jsx';
 import { WarnTriangle } from '../components/icons.jsx';
 import { useReplay } from '../state/ReplayContext.jsx';
 import { bytes, dateTime, hhmm, num, pct, plural, prob, service, shortDate, timeSpan } from '../utils/format.js';
-import { byPriority, NEXT_ACTION, STATUS_LABEL, WORKFLOW, techniqueOf } from '../utils/incidents.js';
+import { byPriority, NEXT_ACTION, REOPEN_TO, STATUSES, STATUS_LABEL, WORKFLOW, techniqueOf } from '../utils/incidents.js';
 
 const POLL_MS = 2000;
 const EDGE_PAGE = 10;
 const SOURCE_LABEL = { mitre: 'MITRE', procedure: 'Procedure', cti: 'CTI-HAL', cve: 'CVE' };
+const TABS = [['triage', 'Triage'], ['response', 'Response'], ['research', 'Research']];
 
 export default function IncidentDetail() {
   const { id } = useParams();
@@ -20,7 +21,10 @@ export default function IncidentDetail() {
   const [loadError, setLoadError] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState('triage');
+  // The tab lives in the URL, so a refresh or a shared link opens the same tab.
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'triage';
+  const setTab = (k) => setParams(k === 'triage' ? {} : { tab: k }, { replace: true });
 
   const load = useCallback(async (opts) => {
     try {
@@ -31,7 +35,7 @@ export default function IncidentDetail() {
     }
   }, [id]);
 
-  useEffect(() => { setInc(null); setTab('triage'); load(); }, [load]);
+  useEffect(() => { setInc(null); load(); }, [load]);
 
   // The explanation is written in the background; poll until it is ready.
   useEffect(() => {
@@ -108,7 +112,19 @@ export default function IncidentDetail() {
                 <button className="btn" disabled={saving} onClick={() => update({ status: 'dismissed' })}>Dismiss</button>
               )}
               {next && <button className="btn btn-primary" disabled={saving} onClick={() => update({ status: next.to })}>{next.label}</button>}
-              {inc.status === 'dismissed' && <button className="btn" disabled={saving} onClick={() => update({ status: 'new' })}>Reopen</button>}
+              {REOPEN_TO[inc.status] && (
+                <button className="btn btn-primary" disabled={saving} onClick={() => update({ status: REOPEN_TO[inc.status] })}>
+                  Reopen
+                </button>
+              )}
+              <label className="status" style={{ gap: 8 }}>
+                <span className="sr-only">Change status</span>
+                <select className="ctl" value="" disabled={saving} title="Correct the status, for example after a mistaken click"
+                  onChange={(e) => e.target.value && update({ status: e.target.value })}>
+                  <option value="">Change status…</option>
+                  {STATUSES.filter((s) => s !== inc.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                </select>
+              </label>
             </div>
             <ol className="stepper" aria-label="Status">
               {WORKFLOW.map((s) => {
@@ -120,7 +136,7 @@ export default function IncidentDetail() {
           </div>
         </div>
         <div role="tablist" className="tabs" style={{ borderBottom: 'none' }}>
-          {[['triage', 'Triage'], ['response', 'Response'], ['research', 'Research']].map(([k, label]) => (
+          {TABS.map(([k, label]) => (
             <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{label}</button>
           ))}
         </div>
@@ -322,10 +338,13 @@ function EdgesTable({ edges }) {
 
 function Response({ inc, saving, update }) {
   const [note, setNote] = useState('');
-  const applied = new Set(inc.mitigations_applied || []);
+  // Show the tick at once; the server copy replaces it when the save returns.
+  const [applied, setApplied] = useState(() => new Set(inc.mitigations_applied || []));
+  useEffect(() => { setApplied(new Set(inc.mitigations_applied || [])); }, [inc.mitigations_applied]);
   const toggle = (m) => {
     const nextSet = new Set(applied);
     nextSet.has(m) ? nextSet.delete(m) : nextSet.add(m);
+    setApplied(nextSet);
     update({ mitigations_applied: [...nextSet] });
   };
 
@@ -370,21 +389,47 @@ function Response({ inc, saving, update }) {
               <button className="btn" disabled={saving || !note.trim()}>Add</button>
             </form>
             {(inc.activity || []).length === 0 && <p className="small muted">No activity yet.</p>}
-            {[...(inc.activity || [])].reverse().map((a, i) => (
+            {describeActivity(inc).reverse().map((a, i) => (
               <div key={i} className="activity">
                 <span className="mono small muted">{dateTime(a.at)}</span>
-                <span>
-                  {a.actor ? `${a.actor}: ` : ''}Status {STATUS_LABEL[a.status] || a.status}
-                  {a.technique_override !== undefined && a.technique_override !== null && <> · technique set to <span className="mono">{a.technique_override}</span></>}
-                </span>
-                {a.note && <span className="muted">{a.note}</span>}
+                {a.lines.map((l, j) => <span key={j}>{l}</span>)}
+                {a.note && <span className="muted">Note: {a.note}</span>}
               </div>
             ))}
+            {(inc.activity || []).length > 0 && <p className="small muted">Times are when the analyst acted, not replay time.</p>}
           </div>
         </section>
       </div>
     </div>
   );
+}
+
+/** Turns the activity log into what actually changed in each entry.
+    The API stores the full status on every entry, so compare each one with the state before it. */
+function describeActivity(inc) {
+  const names = Object.fromEntries(inc.mitigations.map((m) => [m.mitigation_id, m.name]));
+  const label = (id) => `${id}${names[id] ? ` ${names[id]}` : ''}`;
+  let status = 'new';
+  let technique = null;
+  let applied = [];
+  return (inc.activity || []).map((a) => {
+    const lines = [];
+    if (a.status && a.status !== status) lines.push(`Status changed to ${STATUS_LABEL[a.status] || a.status}`);
+    if (a.technique_override !== undefined && a.technique_override !== technique) {
+      lines.push(a.technique_override ? `Technique set to ${a.technique_override}` : `Technique reset to the model's ${inc.technique_id}`);
+      technique = a.technique_override;
+    }
+    if (Array.isArray(a.mitigations_applied)) {
+      const added = a.mitigations_applied.filter((m) => !applied.includes(m));
+      const removed = applied.filter((m) => !a.mitigations_applied.includes(m));
+      added.forEach((m) => lines.push(`Applied ${label(m)}`));
+      removed.forEach((m) => lines.push(`Unticked ${label(m)}`));
+      applied = a.mitigations_applied;
+    }
+    status = a.status || status;
+    if (!lines.length && !a.note) lines.push('Updated');
+    return { at: a.at, lines: lines.map((l) => `${a.actor ? `${a.actor}: ` : ''}${l}`), note: a.note };
+  });
 }
 
 /* ---------------- Research ---------------- */

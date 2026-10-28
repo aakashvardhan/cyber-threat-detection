@@ -29,7 +29,7 @@ export function ReplayProvider({ children }) {
     return next;
   }, []);
 
-  const run = useCallback(async (args) => {
+  const run = useCallback(async (args, { jump = false } = {}) => {
     if (busy.current) return;
     busy.current = true;
     try {
@@ -40,6 +40,10 @@ export function ReplayProvider({ children }) {
     } catch (e) {
       if (e.status === 409) {
         setFinished(true);
+        setPlaying(false);
+      } else if (jump && e.status === 400) {
+        // The test split has gaps; not every day starts with a recorded window.
+        setError(`No traffic was recorded at ${args.windowStart.replace('T', ' ').replace(':00Z', ' UTC')}. Pick another day.`);
         setPlaying(false);
       } else {
         setError(e.message);
@@ -80,7 +84,7 @@ export function ReplayProvider({ children }) {
     pause: () => setPlaying(false),
     setSpeedMs,
     step: () => { setPlaying(false); return run(); },
-    jumpTo: (windowStart) => { setPlaying(false); return run({ windowStart }); },
+    jumpTo: (windowStart) => { setPlaying(false); return run({ windowStart }, { jump: true }); },
     restart: async () => {
       setPlaying(false);
       await run({ reset: true });

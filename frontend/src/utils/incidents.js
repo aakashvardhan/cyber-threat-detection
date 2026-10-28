@@ -17,6 +17,8 @@ export const NEXT_ACTION = {
   contained: { to: 'closed', label: 'Close incident' },
 };
 export const WORKFLOW = ['new', 'confirmed', 'investigating', 'contained', 'closed'];
+/** Where Reopen takes an incident that was finished or dismissed. */
+export const REOPEN_TO = { closed: 'investigating', dismissed: 'new' };
 
 const SEV_RANK = { high: 3, medium: 2, low: 1 };
 
