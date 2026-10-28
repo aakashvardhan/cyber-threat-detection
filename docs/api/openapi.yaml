@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.4.1
+  version: 0.4.2
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
@@ -444,6 +444,14 @@ components:
         window_start: { type: string, format: date-time, nullable: true, description: Last processed window; null before the first call }
         window_index: { type: integer }
         window_count: { type: integer }
+        first_window_start: { type: string, format: date-time, description: First window of the test split }
+        last_window_start: { type: string, format: date-time, description: Last window of the test split }
+        day_starts:
+          type: array
+          items: { type: string, format: date-time }
+          description: >
+            First recorded window of each day. The test split has gaps, so windows are not evenly spaced and a day
+            may start later than 00:00; use these for "jump to day" and the period bounds, not window_count x 5 min.
 
     WindowStats:
       type: object
@@ -619,6 +627,35 @@ components:
         min_score: { type: number }
         fallback_to_tactic: { type: boolean }
         latency_ms: { type: integer }
+        behavior_check: { $ref: '#/components/schemas/BehaviorCheck' }
+
+    BehaviorCheck:
+      type: object
+      description: >
+        ATT&CK techniques that the incident's traffic pattern matches, searched over all techniques without the
+        detector's technique as a filter. Lets the analyst see when the evidence points somewhere else, including
+        techniques the detector was never trained on.
+      required: [facts, reading, method, candidates, agrees_with_detector]
+      properties:
+        facts: { type: string, description: The traffic in numbers (connections, hosts, ports, failure rate, bytes) }
+        reading:
+          type: array
+          items: { type: string }
+          description: Short analyst reading of the traffic, used as the search query
+        method: { type: string, example: bm25+vector }
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [technique_id, name, rank]
+            properties:
+              technique_id: { type: string, example: T1110 }
+              name: { type: string, example: Brute Force }
+              rank: { type: integer }
+        agrees_with_detector:
+          type: boolean
+          nullable: true
+          description: True when the detector's technique is among the top 3 candidates
 
     Mitigation:
       type: object
