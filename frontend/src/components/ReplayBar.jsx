@@ -1,15 +1,20 @@
 import { useMemo } from 'react';
 import { SPEEDS, useReplay } from '../state/ReplayContext.jsx';
-import { dateTime, num, shortDate } from '../utils/format.js';
+import { dateTime, hhmm, num, shortDate } from '../utils/format.js';
 import { PauseIcon, PlayIcon } from './icons.jsx';
 
 const WINDOW_MS = 5 * 60 * 1000;
 const BINS = 120;
 
-/** Start and end of the test period, from the replay position (windows are 5 minutes apart). */
+/** Start and end of the test period. The test split has gaps, so use the bounds the backend reports;
+ *  older backends without them: estimate from the replay position (assumes no gaps). */
 function usePeriod(data) {
   return useMemo(() => {
     const r = data?.replay;
+    if (r?.first_window_start && r?.last_window_start) {
+      const start = new Date(r.first_window_start).getTime();
+      return { start, end: new Date(r.last_window_start).getTime() + WINDOW_MS, count: r.window_count };
+    }
     if (!r?.window_start || !r.window_index) return null;
     const start = new Date(r.window_start).getTime() - (r.window_index - 1) * WINDOW_MS;
     return { start, end: start + r.window_count * WINDOW_MS, count: r.window_count };
@@ -34,20 +39,22 @@ export default function ReplayBar() {
     const normal = new Array(BINS).fill(0);
     const attack = new Array(BINS).fill(0);
     const done = new Array(BINS).fill(false);
+    const span = period.end - period.start;
     for (const w of data.windows) {
-      const idx = Math.floor((new Date(w.window_start).getTime() - period.start) / WINDOW_MS);
-      const bin = Math.min(BINS - 1, Math.max(0, Math.floor((idx * BINS) / period.count)));
+      const t = new Date(w.window_start).getTime() - period.start;
+      const bin = Math.min(BINS - 1, Math.max(0, Math.floor((t * BINS) / span)));
       normal[bin] += w.events - w.attack_edges;
       attack[bin] += w.attack_edges;
       done[bin] = true;
     }
     const maxN = Math.max(1, ...normal);
     const maxA = Math.max(1, ...attack);
-    const head = ((pos.window_index - 0.5) / period.count) * 100;
+    const head = pos?.window_start ? ((new Date(pos.window_start).getTime() + WINDOW_MS / 2 - period.start) / span) * 100 : 0;
     return { normal, attack, done, maxN, maxA, head };
   }, [data, period, pos]);
 
   const days = useMemo(() => {
+    if (pos?.day_starts?.length) return pos.day_starts;   // first recorded window of each day
     if (!period) return [];
     const out = [];
     const first = new Date(period.start);
@@ -56,7 +63,7 @@ export default function ReplayBar() {
       if (t >= period.start) out.push(new Date(t).toISOString().replace('.000Z', 'Z'));
     }
     return out;
-  }, [period]);
+  }, [period, pos]);
 
   return (
     <section className="replay" aria-label="Replay">
@@ -84,7 +91,7 @@ export default function ReplayBar() {
               <span className="muted">Jump to</span>
               <select className="ctl" value="" onChange={(e) => e.target.value && replay.jumpTo(e.target.value)}>
                 <option value="">Choose a day</option>
-                {days.map((d) => <option key={d} value={d}>{shortDate(d)}, 00:00</option>)}
+                {days.map((d) => <option key={d} value={d}>{shortDate(d)}, {hhmm(d)}</option>)}
               </select>
             </label>
           )}

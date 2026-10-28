@@ -73,5 +73,5 @@ Colors live only in `tokens.css`. To change a color, change it there.
 
 - "Compared with normal traffic" and connection states (REJ, SF) from the design need fields the API does not return yet, so the Traffic panel shows connections, bytes and protocol only.
 - `GET /incidents` returns every incident and window on each tick. It gets slower as the replay goes on (about 1 MB after 2,400 windows). A `since` parameter on the backend would fix this.
-- The test split has gaps, so not every day has a window at 00:00. **Jump to** shows a message when it hits one. The backend could snap to the next recorded window instead.
+- The test split has gaps (5,325 windows spread over May 23 to Jul 31). **Jump to** lists the first recorded window of each day from `replay.day_starts` (API v0.4.2); with an older backend it falls back to 00:00 of each day and shows a message when a day has no traffic then.
 - Service and port show "—" with the Oct 6 demo data, which has no service column.

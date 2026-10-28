@@ -132,18 +132,22 @@ test('9. After a jump, Traffic only shows the 6 hours before the clock', async (
   const jump = page.locator('.replay-right select');
   await expect(jump.locator('option').nth(5)).toBeAttached();
   const days = await jump.locator('option').evaluateAll((o) => o.map((x) => x.value).filter(Boolean));
-  await jump.selectOption(days[4]); // a day that has traffic at 00:00 in the test split
-  await expect(page.locator('.replay-clock')).toContainText('00:00 UTC');
+  await jump.selectOption(days[4]);
+  await expect(page.locator('.replay-clock')).toContainText(days[4].slice(11, 16));
   // Only the window just jumped to is within 6 hours, so each lane has one bar.
   await expect(page.locator('.lane .bars').first().locator('span')).toHaveCount(1);
 });
 
-test('10. Jumping to a day with no traffic at midnight explains why', async ({ page }) => {
+test('10. Jump to offers only days with recorded traffic, including the last one', async ({ page, request }) => {
+  const { replay } = await api(request, 'GET', '/incidents');
   await page.goto('/');
   const jump = page.locator('.replay-right select');
   await expect(jump.locator('option').nth(5)).toBeAttached();
-  await jump.selectOption('2025-06-09T00:00:00Z'); // gap in the UWF test split
-  await expect(page.getByRole('alert')).toContainText('No traffic was recorded');
+  const days = await jump.locator('option').evaluateAll((o) => o.map((x) => x.value).filter(Boolean));
+  if (replay.day_starts) expect(days).toEqual(replay.day_starts);   // gaps in the test split are skipped
+  await jump.selectOption(days[days.length - 1]);
+  await expect(page.locator('.replay-clock')).toContainText(days[days.length - 1].slice(11, 16));
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('11. A down backend shows a message instead of a blank page', async ({ page }) => {
