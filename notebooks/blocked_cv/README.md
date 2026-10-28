@@ -15,6 +15,7 @@ splitting the data, so that every edge is tested once and no attack campaign is 
 | 9c | **Leave-one-recording-out** (6 folds, one per UWF recording), extra training seeds, leakage checks |
 | 9d | Per-recording rescaling experiment (rejected) |
 | 10 | Results tables |
+| 11 | Sai's final model (`Data-Prep-Final`, `Threat Detection Model Training Final`) under leave-one-recording-out, a combined model, and a three-model comparison |
 
 Outputs are written to `Shareddrives/298B/blocked_cv/`. The notebook was run in Colab over several sessions, so cell
 execution order is not linear.
@@ -61,6 +62,33 @@ seed 44 - 0.507, 0.963, 0.613, 0.060, 0.942, 0.592 (ZeekData22, ZeekData24, Fall
   upper bound for mixed real-world traffic.
 - Rescaling features per recording raised Fall24-2 from 0.12 to 0.54 but dropped the pooled score from 0.89 to 0.04,
   so it is not used.
+
+## Sai's final model under leave-one-recording-out (section 11)
+
+Sai's features, per-window graphs and 3-head GraphSAGE, trained on five recordings and tested on the sixth (same folds as
+section 9c). On her random 80/10/10 window split the same model scores PR-AUC 0.989. Section 11 writes
+`sai_edges_5min_capture.parquet`, used by the fine-tuned LLM notebook (SJSU-119).
+
+| Model | Pooled PR-AUC | Per-recording average | Recall | Precision | FPR |
+|---|---|---|---|---|---|
+| Section 9c model (validation threshold) | 0.888 | 0.683 | 0.83 | 0.77 | 2.0% |
+| Sai's model (threshold 0.5) | 0.462 | 0.577 | 0.03 | 0.11 | 2.3% |
+| Combined model (validation threshold) | 0.357 | 0.571 | 0.24 | 0.36 | 3.4% |
+
+| Recording held out | Section 9c | Sai's model | Combined |
+|---|---|---|---|
+| ZeekData22 | 0.590 | 0.086 | 0.126 |
+| ZeekData24 | 0.960 | 0.959 | 0.806 |
+| Fall22 | 0.596 | 0.170 | 0.253 |
+| Fall24-2 | 0.116 | 0.280 | 0.262 |
+| Sum25-1 | 0.944 | 0.979 | 0.977 |
+| Sum25-2 | 0.892 | 0.988 | 1.000 |
+
+- Sai's model ranks attacks well inside some recordings (Sum25-1, Sum25-2, Fall24-2 above the section 9c model), but its
+  scores are not comparable across folds: at 0.5 it catches 0.8% of ZeekData24 attacks, so pooled recall is 3%.
+- Tactic and technique on labelled attack edges: Sai's heads reach tactic top-1 0.014 and technique macro-F1 0.001;
+  the combined model (losses on attack edges only) reaches tactic top-1 0.68 / micro-F1 0.68 and technique micro-F1 0.49 /
+  macro-F1 0.058. Only T1595 is found in a held-out recording; 19 of 27 techniques occur in a single recording.
 
 ## Running
 
