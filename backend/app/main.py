@@ -1,4 +1,4 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.1).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.2).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
@@ -14,16 +14,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import schemas
-from app.config import Settings
+from app.config import DEMO_DATA, Settings
 from app.detectors import Detector, load_detector
+from app.behavior import BehaviorSearch
 from app.explain import ExplanationManager
 from app.incidents import Incident, ReplayController, ReplayError
 from app.knowledge import KnowledgeBase
 from app.replay_data import ReplayData
+from app.vector_store import VectorStore, procedures_from_stix
 from app.research import ModelOutputs, load_metrics
 from app.timeutil import iso, now_iso
 
 log = logging.getLogger(__name__)
+DEMO_KNOWLEDGE = DEMO_DATA / "rag" / "processed"
 
 
 @dataclass
@@ -44,15 +47,29 @@ def build_state(settings: Settings) -> AppState:
     replay_data = ReplayData.load(settings.replay_file)
     detector = load_detector(settings, replay_data)
     kb = KnowledgeBase.load(settings.knowledge_dir)
+    if not kb.techniques and DEMO_KNOWLEDGE.exists():    # KNOWLEDGE_DIR has only CTI/CVE chunks: take ATT&CK from the demo
+        demo = KnowledgeBase.load(DEMO_KNOWLEDGE)
+        kb.techniques, kb.mitigations = demo.techniques, demo.mitigations
+    behavior = BehaviorSearch.load(settings.attack_stix) if settings.behavior_check else BehaviorSearch(None)
+    if not kb.chunks.get("procedure") and settings.attack_stix is not None:
+        kb.add_chunks("procedure", procedures_from_stix(settings.attack_stix))   # procedure_chunks.jsonl missing or LFS pointer
+    if settings.rag_mode in ("auto", "vector") and settings.chroma_dir is not None:
+        kb.vector = VectorStore.load(settings.knowledge_dir, settings.chroma_dir, settings.embed_model,
+                                     settings.attack_stix, behavior.index.docs if behavior.enabled else None)
+        if kb.vector is None and settings.rag_mode == "vector":
+            raise RuntimeError("RAG_MODE=vector but the vector store could not be loaded (see the log above)")
+        behavior.vector = kb.vector
     metrics = load_metrics(settings.metrics_file)
     primary = settings.primary_model_name or (
         detector.name if detector.name == "heuristic-fallback" else metrics.get("primary_model") or detector.name)
-    log.info("Replay: %s (%d windows) | detector: %s | knowledge base: %s | LLM: %s",
-             replay_data.source, len(replay_data), detector.name, settings.knowledge_dir, settings.llm_provider)
+    log.info("Replay: %s (%d windows) | detector: %s | knowledge base: %s | retrieval: %s | behaviour check: %s | LLM: %s",
+             replay_data.source, len(replay_data), detector.name, settings.knowledge_dir,
+             f"vector ({kb.vector.model_name})" if kb.vector else "token overlap",
+             "on" if behavior.enabled else "off", settings.llm_provider)
     return AppState(
         settings=settings, replay_data=replay_data, detector=detector,
         controller=ReplayController(replay_data, detector, settings.incident_gap_minutes),
-        kb=kb, explanations=ExplanationManager(settings, kb),
+        kb=kb, explanations=ExplanationManager(settings, kb, behavior=behavior, data=replay_data),
         model_outputs=ModelOutputs.load(settings.model_outputs, replay_data),
         metrics=metrics, primary_model=primary, edit_lock=threading.Lock())
 
@@ -148,7 +165,7 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.4.1",
+    app = FastAPI(title="Threat Detection Console API", version="0.4.2",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["*"])
@@ -191,7 +208,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "replay": {"window_start": iso(last),
                        "window_index": state.replay_data.window_position[last] + 1 if last is not None else 0,
-                       "window_count": len(state.replay_data)},
+                       "window_count": len(state.replay_data),
+                       "first_window_start": iso(state.replay_data.windows[0]) if len(state.replay_data) else None,
+                       "last_window_start": iso(state.replay_data.windows[-1]) if len(state.replay_data) else None,
+                       "day_starts": [iso(d) for d in state.replay_data.day_starts]},
             "primary_model": state.primary_model,
             "threshold": state.detector.threshold,
             "windows": [{"window_start": iso(w), "events": replay.results[w].events,

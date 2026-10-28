@@ -99,7 +99,8 @@ def test_grouping_joins_within_30_minutes_and_splits_after(client):
 def test_incident_list_shape(client):
     client.post("/detect", json={"window_start": iso(2)})
     body = client.get("/incidents").json()
-    assert body["replay"] == {"window_start": iso(2), "window_index": 3, "window_count": 12}
+    assert body["replay"] == {"window_start": iso(2), "window_index": 3, "window_count": 12,
+                              "first_window_start": iso(0), "last_window_start": iso(11), "day_starts": [iso(0)]}
     assert body["primary_model"] == "model_1" and body["threshold"] == 0.5
     assert body["windows"] == [{"window_start": iso(2), "events": 10, "attack_edges": 6}]
 

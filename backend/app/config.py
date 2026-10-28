@@ -48,6 +48,12 @@ class Settings:
     model_outputs: Path | None = None         # Models 1-5 per edge, for the Research tab
     metrics_file: Path | None = None
     knowledge_dir: Path | None = None
+    # retrieval: "auto" uses vector search when chromadb + sentence-transformers + the model are available
+    rag_mode: str = "auto"                    # "auto" | "vector" | "token"
+    embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    chroma_dir: Path | None = None
+    attack_stix: Path | None = None           # enterprise-attack.json: technique documents + procedure examples
+    behavior_check: bool = True
 
     # explanations
     llm_provider: str = "none"                # "groq" | "local" | "none"
@@ -55,6 +61,7 @@ class Settings:
     llm_model: str | None = None
     llm_api_key: str | None = None
     llm_timeout_s: float = 60.0
+    llm_max_tokens: int = 2000
     redact_ips: bool = False
 
     # behaviour
@@ -99,11 +106,18 @@ class Settings:
             model_outputs=path("MODEL_OUTPUTS", data_dir / "model_outputs.jsonl"),
             metrics_file=path("METRICS_FILE", data_dir / "metrics.json", BUNDLED_DATA / "metrics.default.json"),
             knowledge_dir=path("KNOWLEDGE_DIR", data_dir / "knowledge", DEMO_DATA / "rag" / "processed"),
+            rag_mode=_env("RAG_MODE", "auto").lower(),
+            embed_model=_env("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
+            chroma_dir=Path(_env("CHROMA_DIR", str(data_dir / "chroma_db"))),
+            attack_stix=path("ATTACK_STIX", data_dir / "knowledge" / "enterprise-attack.json",
+                             DEMO_DATA / "rag" / "enterprise-attack.json"),
+            behavior_check=_flag("BEHAVIOR_CHECK", True),
             llm_provider=provider,
             llm_base_url=base_url,
             llm_model=model,
             llm_api_key=api_key,
             llm_timeout_s=float(_env("LLM_TIMEOUT_S", "60")),
+            llm_max_tokens=int(_env("LLM_MAX_TOKENS", "2000")),
             redact_ips=_flag("REDACT_IPS", False),
             incident_gap_minutes=int(_env("INCIDENT_GAP_MINUTES", "30")),
             retrieval_top_k=int(_env("RETRIEVAL_TOP_K", "5")),
