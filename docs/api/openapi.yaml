@@ -1,0 +1,932 @@
+openapi: 3.0.3
+info:
+  title: Threat Detection Console API
+  version: 0.4.3
+  description: |
+    Backend API for the analyst console (CS/DATA 298B, Team 3).
+
+    - Detection runs live as the browser replays the test traffic window by window (`POST /detect`).
+    - RAG + LLM run the first time an incident is opened, then the result is cached (`GET /incidents/{id}`).
+    - Evaluation and knowledge-base numbers are computed offline (`GET /metrics`).
+    - Filtering, sorting, charts and reports run in the browser, so no other endpoints are needed.
+
+    Only the primary model runs live. Outputs of Models 1-5 for the Research tab are precomputed
+    for the test split and returned inside `GET /incidents/{id}`.
+
+    **Access.** Every request sends a shared demo key in the `X-API-Key` header. This keeps strangers
+    from resetting the replay, editing incidents or starting LLM jobs on the deployed demo. It is not
+    per-user login.
+
+    **Data sent to the LLM provider.** The demo uses the public UWF-ZeekData24 test split. Explanations
+    may call an external LLM (Groq in the Oct 6 demo); the provider is set by `LLM_PROVIDER`
+    (`groq`, `local`, or `none` for evidence-only mode). With `REDACT_IPS=true`, IP addresses are
+    replaced by host aliases (`host-A`, `host-B`, ...) before anything is sent out, and mapped back in
+    the response. Use `local`/`none` or redaction for any non-public traffic.
+
+    **Concurrency.** The backend handles state-changing work (`POST /detect`, `PATCH`) one request at a
+    time under a single lock, and runs at most one explanation job per incident.
+servers:
+  - url: http://localhost:8000
+    description: Local development
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Replay
+    description: Live detection over the replayed test traffic
+  - name: Incidents
+    description: Incident list and incident detail
+  - name: Research
+    description: Offline evaluation and knowledge-base statistics
+
+paths:
+  /detect:
+    post:
+      tags: [Replay]
+      operationId: detectWindow
+      summary: Run the primary model on one 5-minute window
+      description: |
+        Wraps `InferenceEngine.run_window()` from the demo app, then updates incident grouping.
+        The browser calls it every N seconds while the replay plays (default 1 window every 5 s),
+        and once per click for Step or Jump to. It always sends `window_start` (taken from the previous
+        response's `next_window_start`) and waits for the response before the next call.
+
+        Processing rules:
+        - **Idempotent.** A window that was already processed is not processed again; the stored result
+          is returned with no changes, so a retry never duplicates events or skips a window.
+        - **Timestamps.** `window_start` is normalized to UTC and matched to the replay index (stored as
+          naive UTC), so `...Z` and `+00:00` both work.
+        - **Atomic reset.** With `reset: true` the new replay replaces the old state only after its first
+          window succeeds; if processing fails, the previous incidents and cursor are kept.
+
+        Grouping rule: an attack edge joins an open incident with the same `source_ip` and the same
+        top technique if that incident's last window is less than 30 minutes earlier; otherwise it
+        starts a new incident.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectRequest'
+            example:
+              window_start: '2025-05-30T16:25:00Z'
+              reset: false
+      responses:
+        '200':
+          description: Window processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectResponse'
+              example:
+                window_start: '2025-05-30T16:25:00Z'
+                next_window_start: '2025-05-30T16:30:00Z'
+                window_index: 2214
+                window_count: 5326
+                already_processed: false
+                events: 42
+                attack_edges: 4
+                new_incident_ids: [INC-0107]
+                updated_incident_ids: [INC-0101, INC-0104]
+        '400':
+          description: '`window_start` is not a window in the test split'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: The replay has already processed the last window; send `reset` to start over
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /incidents:
+    get:
+      tags: [Incidents]
+      operationId: listIncidents
+      summary: All incidents so far, plus per-window stats
+      description: |
+        Everything Overview and the Incidents list need, in one response. No query parameters:
+        the browser filters, sorts and pages.
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Incident list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentList'
+              example:
+                replay:
+                  window_start: '2025-05-30T16:25:00Z'
+                  window_index: 2214
+                  window_count: 5326
+                primary_model: model_5
+                threshold: 0.5
+                windows:
+                  - window_start: '2025-05-30T16:25:00Z'
+                    events: 42
+                    attack_edges: 4
+                incidents:
+                  - incident_id: INC-0101
+                    source_ip: 143.88.6.11
+                    technique_id: T1190
+                    technique_name: Exploit Public-Facing Application
+                    tactic: Initial Access
+                    max_attack_probability: 0.94
+                    severity: high
+                    low_confidence: false
+                    target_count: 6
+                    edge_count: 11
+                    first_seen: '2025-05-30T15:50:00Z'
+                    last_seen: '2025-05-30T16:25:00Z'
+                    edges_preview:
+                      - event_id: uwf-test-135942
+                        window_start: '2025-05-30T16:25:00Z'
+                        destination_ip: 143.88.255.10
+                        service: http
+                        port: 80
+                        attack_probability: 0.94
+
+  /incidents/{incident_id}:
+    parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema:
+          type: string
+          example: INC-0101
+    get:
+      tags: [Incidents]
+      operationId: getIncident
+      parameters:
+        - name: refresh_explanation
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: Start a new explanation for the incident as it is now (used by the Regenerate button when `explanation.stale` is true)
+      summary: Full incident; starts RAG + LLM on the first call
+      description: |
+        One response feeds the whole Incident Detail page (Triage, Response, Research tabs) and the
+        Report.
+
+        First call: the backend runs retrieval (fast), returns the incident with its evidence and
+        `explanation.status = generating`, and starts the LLM in the background. The browser polls
+        this endpoint every 2 s until `explanation.status` is `ready` or `error`. Later calls return
+        the cached result. Only one explanation job runs per incident; concurrent calls share it.
+
+        Incidents keep growing during the replay. The explanation records the `edge_count` it was
+        based on; when the incident has changed since, the response sets `explanation.stale = true`
+        and the UI offers **Regenerate** (`?refresh_explanation=true`). Evidence is re-retrieved at
+        the same time.
+      responses:
+        '200':
+          description: Incident detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDetail'
+              example:
+                incident_id: INC-0101
+                source_ip: 143.88.6.11
+                technique_id: T1190
+                technique_name: Exploit Public-Facing Application
+                tactic: Initial Access
+                target_count: 6
+                edge_count: 11
+                verdict: attack
+                max_attack_probability: 0.94
+                severity: high
+                low_confidence: false
+                first_seen: '2025-05-30T15:50:00Z'
+                last_seen: '2025-05-30T16:25:00Z'
+                status: new
+                mitre_candidates:
+                  - { rank: 1, technique_id: T1190, name: Exploit Public-Facing Application, confidence: 0.72 }
+                  - { rank: 2, technique_id: T1595, name: Active Scanning, confidence: 0.41 }
+                  - { rank: 3, technique_id: T1046, name: Network Service Discovery, confidence: 0.18 }
+                tactic_prediction: { label: Initial Access, confidence: 0.81 }
+                edges:
+                  - event_id: uwf-test-135942
+                    window_start: '2025-05-30T16:25:00Z'
+                    destination_ip: 143.88.255.10
+                    attack_probability: 0.94
+                    traffic_features:
+                      connection_count: 37
+                      total_orig_bytes: 18210
+                      total_resp_bytes: 902
+                      tcp_count: 37
+                      udp_count: 0
+                      icmp_count: 0
+                      dominant_destination_port: 80
+                      dominant_zeek_service: http
+                      conn_state_ratios: { REJ: 0.7, SF: 0.3 }
+                evidence:
+                  - evidence_id: E1
+                    source: mitre
+                    level: technique
+                    ref: T1190
+                    title: Exploit Public-Facing Application
+                    text: Adversaries may attempt to exploit a weakness in an Internet-facing host...
+                    score: 0.91
+                    url: https://attack.mitre.org/techniques/T1190/
+                  - evidence_id: E3
+                    source: procedure
+                    level: technique
+                    ref: T1190
+                    title: '[ATT&CK procedure example]'
+                    text: '...'
+                    score: 0.72
+                    url: null
+                  - evidence_id: E4
+                    source: cti
+                    level: tactic
+                    ref: '[report id]'
+                    title: '[CTI report]'
+                    text: '...'
+                    score: 0.55
+                    url: null
+                cve_status: not_applicable
+                explanation:
+                  status: ready
+                  stale: false
+                  based_on_edge_count: 11
+                  model: openai/gpt-oss-20b
+                  mode: llm
+                  latency_ms: 2400
+                  groundedness: 0.82
+                  sentences:
+                    - { text: '[Source] made 37 short HTTP connections to 6 web servers...', citations: [E1, E3] }
+                    - { text: The attacker likely aimed to gain a foothold on the DMZ., citations: [] }
+                  next_steps:
+                    - Block the source IP at the perimeter firewall
+                    - Check web server logs on the targets
+                retrieval_trace:
+                  query: T1190 http port 80 many short connections REJ
+                  sources:
+                    - { source: mitre, returned: 1 }
+                    - { source: procedure, searched: 412, returned: 2 }
+                    - { source: cti, searched: 1880, returned: 2 }
+                    - { source: cve, returned: 0, skipped: true }
+                  top_k: 5
+                  min_score: 0.5
+                  fallback_to_tactic: false
+                  latency_ms: 320
+                mitigations:
+                  - { mitigation_id: M1050, name: Exploit Protection }
+                  - { mitigation_id: M1030, name: Network Segmentation }
+                related_incident_ids: [INC-0104, INC-0097]
+                models:
+                  - { model: model_1, label: attack, attack_probability: 0.88, technique_id: T1190, confidence: 0.64 }
+                  - { model: model_4, label: normal, attack_probability: 0.44, technique_id: T1595, confidence: 0.38, explanation_text: '...', groundedness: 0.85 }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No incident with this ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      tags: [Incidents]
+      operationId: updateIncident
+      summary: Update status, note and applied mitigations (optional endpoint)
+      description: |
+        Optional. Without it, the browser stores the same fields in local storage, which is enough
+        for a single-user demo. Only the fields present in the body change; others are kept. Each
+        call appends an entry to the incident's `activity` log, and the saved `technique_override`
+        and `mitigations_applied` are returned in the incident summary and detail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentUpdate'
+            example:
+              status: confirmed
+              technique_override: T1595
+              note: Matches web exploit pattern; escalating.
+              mitigations_applied: [M1050]
+      responses:
+        '200':
+          description: Updated incident summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentSummary'
+        '404':
+          description: No incident with this ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+
+  /incidents/{incident_id}/graph:
+    parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema: { type: string, example: INC-0040 }
+    get:
+      tags: [Incidents]
+      operationId: getIncidentGraph
+      summary: The 5-minute window graph around the incident's source
+      description: |
+        Nodes are IPs and edges are the window's aggregated connections, each with the detector's attack
+        probability. `in_two_hop` marks the edges a 2-layer GraphSAGE uses for the source's edges (every edge
+        touching the source or one of its targets). Windows with more than 400 edges keep the two-hop part
+        and the most suspicious of the rest (`truncated: true`).
+      parameters:
+        - name: window_start
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: One of the incident's windows (`windows` in the response); default the latest
+      responses:
+        '200':
+          description: Window graph
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WindowGraph' }
+        '400':
+          description: The window is not one of the incident's windows
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such incident
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /metrics:
+    get:
+      tags: [Research]
+      operationId: getMetrics
+      summary: Offline evaluation, RAG ablation and knowledge-base stats
+      description: |
+        Computed once from the evaluation notebooks; can be a static JSON file served by the backend.
+        Metrics a model does not have are `null` (for example calibration for Models 1-4, or
+        retrieval for models without RAG).
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Shared demo key, set in the backend and frontend environment
+
+  responses:
+    Unauthorized:
+      description: Missing or wrong `X-API-Key`
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationFailed:
+      description: Request body or parameters failed validation (FastAPI default format)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+  schemas:
+    ValidationError:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            required: [loc, msg, type]
+            properties:
+              loc:
+                type: array
+                description: Where the error is, e.g. ["body", "status"]
+                items: { oneOf: [{ type: string }, { type: integer }] }
+              msg: { type: string }
+              type: { type: string }
+
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Human-readable message shown in the UI error state
+
+    Severity:
+      type: string
+      nullable: true
+      enum: [high, medium, low, null]
+      description: From the primary model; null when the primary model has no severity (then the UI ranks by probability)
+
+    IncidentStatus:
+      type: string
+      enum: [new, confirmed, investigating, contained, closed, dismissed]
+
+    DetectRequest:
+      type: object
+      properties:
+        window_start:
+          type: string
+          format: date-time
+          description: Window to run. Omit to run the next window after the last one processed.
+        reset:
+          type: boolean
+          default: false
+          description: Clear all incidents and start the replay from `window_start` (or the first window)
+
+    DetectResponse:
+      type: object
+      required: [window_start, window_index, window_count, events, attack_edges, new_incident_ids, updated_incident_ids]
+      properties:
+        window_start: { type: string, format: date-time }
+        next_window_start: { type: string, format: date-time, nullable: true, description: Window to send next; null after the last window }
+        already_processed: { type: boolean, description: True when this window had been processed before and the stored result was returned }
+        window_index: { type: integer, description: 1-based position of this window in the test split }
+        window_count: { type: integer, description: Total windows in the test split }
+        events: { type: integer, description: Edges in this window }
+        attack_edges: { type: integer, description: Edges predicted as attack by the primary model }
+        new_incident_ids:
+          type: array
+          items: { type: string }
+        updated_incident_ids:
+          type: array
+          items: { type: string }
+
+    ReplayState:
+      type: object
+      required: [window_index, window_count]
+      properties:
+        window_start: { type: string, format: date-time, nullable: true, description: Last processed window; null before the first call }
+        window_index: { type: integer }
+        window_count: { type: integer }
+        first_window_start: { type: string, format: date-time, description: First window of the test split }
+        last_window_start: { type: string, format: date-time, description: Last window of the test split }
+        day_starts:
+          type: array
+          items: { type: string, format: date-time }
+          description: >
+            First recorded window of each day. The test split has gaps, so windows are not evenly spaced and a day
+            may start later than 00:00; use these for "jump to day" and the period bounds, not window_count x 5 min.
+
+    WindowStats:
+      type: object
+      required: [window_start, events, attack_edges]
+      properties:
+        window_start: { type: string, format: date-time }
+        events: { type: integer }
+        attack_edges: { type: integer }
+        high_confidence_edges:
+          type: integer
+          description: >-
+            Flagged edges whose attack probability is at least 0.80 (or the model threshold, if higher).
+            A subset of attack_edges; the overview's traffic chart shows it as the red part of each bar.
+
+    EdgePreview:
+      type: object
+      required: [event_id, window_start, destination_ip, attack_probability]
+      properties:
+        event_id: { type: string, example: uwf-test-135942 }
+        window_start: { type: string, format: date-time }
+        destination_ip: { type: string }
+        service: { type: string, nullable: true }
+        port: { type: integer, nullable: true }
+        attack_probability: { type: number, minimum: 0, maximum: 1 }
+
+    IncidentSummary:
+      type: object
+      required: [incident_id, source_ip, technique_id, technique_name, tactic, max_attack_probability, severity, low_confidence, target_count, edge_count, first_seen, last_seen]
+      properties:
+        incident_id: { type: string, example: INC-0101 }
+        source_ip: { type: string }
+        technique_id: { type: string, description: Top-1 technique of the primary model, example: T1190 }
+        technique_name: { type: string }
+        tactic: { type: string }
+        max_attack_probability: { type: number, minimum: 0, maximum: 1 }
+        severity: { $ref: '#/components/schemas/Severity' }
+        low_confidence: { type: boolean, description: 'True when the probability is within 0.10 of `threshold`' }
+        target_count: { type: integer, description: Distinct destination IPs }
+        edge_count: { type: integer }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        status:
+          allOf: [{ $ref: '#/components/schemas/IncidentStatus' }]
+          description: Only present when the PATCH endpoint is built
+        technique_override: { type: string, nullable: true, description: Analyst correction of the top technique (PATCH endpoint only) }
+        mitigations_applied:
+          type: array
+          description: Mitigation IDs marked as applied (PATCH endpoint only)
+          items: { type: string }
+        edges_preview:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/EdgePreview' }
+
+    IncidentList:
+      type: object
+      required: [replay, primary_model, threshold, windows, incidents]
+      properties:
+        replay: { $ref: '#/components/schemas/ReplayState' }
+        primary_model: { type: string, example: model_5 }
+        threshold: { type: number, description: Primary model decision threshold }
+        windows:
+          type: array
+          description: One entry per processed window (for Overview numbers and the trend chart)
+          items: { $ref: '#/components/schemas/WindowStats' }
+        incidents:
+          type: array
+          items: { $ref: '#/components/schemas/IncidentSummary' }
+
+    MitreCandidate:
+      type: object
+      required: [rank, technique_id, confidence]
+      properties:
+        rank: { type: integer, minimum: 1, maximum: 3 }
+        technique_id: { type: string }
+        name: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    TacticPrediction:
+      type: object
+      required: [label, confidence]
+      properties:
+        label: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    TrafficFeatures:
+      type: object
+      description: Same fields as `event.traffic_features` in `create_gnn_json()`
+      properties:
+        connection_count: { type: integer }
+        total_duration: { type: number, nullable: true }
+        maximum_duration: { type: number, nullable: true }
+        total_orig_bytes: { type: integer }
+        total_resp_bytes: { type: integer }
+        total_orig_packets: { type: integer }
+        total_resp_packets: { type: integer }
+        tcp_count: { type: integer }
+        udp_count: { type: integer }
+        icmp_count: { type: integer }
+        dominant_destination_port: { type: integer, nullable: true }
+        destination_port_group: { type: string, nullable: true }
+        dominant_zeek_service: { type: string, nullable: true }
+        service_counts: { type: object, additionalProperties: { type: integer } }
+        conn_state_counts: { type: object, additionalProperties: { type: integer } }
+        conn_state_ratios: { type: object, additionalProperties: { type: number } }
+
+    Edge:
+      type: object
+      required: [event_id, window_start, destination_ip, attack_probability, traffic_features]
+      properties:
+        event_id: { type: string }
+        window_start: { type: string, format: date-time }
+        destination_ip: { type: string }
+        attack_probability: { type: number, minimum: 0, maximum: 1 }
+        traffic_features: { $ref: '#/components/schemas/TrafficFeatures' }
+
+    Evidence:
+      type: object
+      required: [evidence_id, source, level, title, text, score]
+      properties:
+        evidence_id: { type: string, description: 'Referenced by `explanation.sentences[].citations`', example: E1 }
+        source: { type: string, enum: [mitre, cti, procedure, cve] }
+        level: { type: string, enum: [technique, tactic, procedure, cve], description: '`tactic` = fallback when no technique-level match was found' }
+        ref: { type: string, description: 'Technique ID, report ID or CVE ID' }
+        title: { type: string }
+        text: { type: string }
+        score: { type: number }
+        url: { type: string, nullable: true }
+
+    Sentence:
+      type: object
+      required: [text, citations]
+      properties:
+        text: { type: string }
+        citations:
+          type: array
+          description: Evidence IDs; an empty list is shown as an unsupported sentence
+          items: { type: string }
+
+    Explanation:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [generating, ready, error] }
+        stale: { type: boolean, description: True when the incident gained edges or changed technique after this explanation was made }
+        based_on_edge_count: { type: integer, description: Incident edge_count when the explanation was generated }
+        started_at: { type: string, format: date-time, description: Set while generating }
+        message: { type: string, description: Set when status is error }
+        model: { type: string, nullable: true }
+        mode: { type: string, enum: [llm, fallback], description: '`fallback` = local synthesis without an LLM (demo behaviour without a key)' }
+        latency_ms: { type: integer }
+        groundedness: { type: number, minimum: 0, maximum: 1 }
+        sentences:
+          type: array
+          items: { $ref: '#/components/schemas/Sentence' }
+        next_steps:
+          type: array
+          items: { type: string }
+
+    RetrievalSource:
+      type: object
+      required: [source, returned]
+      properties:
+        source: { type: string, enum: [mitre, procedure, cti, cve] }
+        searched: { type: integer, description: Candidates scored }
+        returned: { type: integer }
+        skipped: { type: boolean, description: True when the source does not apply (e.g. no linked CVE) }
+
+    RetrievalTrace:
+      type: object
+      required: [query, sources]
+      properties:
+        query: { type: string }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/RetrievalSource' }
+        top_k: { type: integer }
+        min_score: { type: number }
+        fallback_to_tactic: { type: boolean }
+        latency_ms: { type: integer }
+        behavior_check: { $ref: '#/components/schemas/BehaviorCheck' }
+
+    WindowGraph:
+      type: object
+      required: [incident_id, window_start, windows, threshold, source_ip, window_edge_count, truncated, nodes, edges]
+      properties:
+        incident_id: { type: string }
+        window_start: { type: string, format: date-time }
+        windows: { type: array, items: { type: string, format: date-time }, description: All windows of the incident }
+        threshold: { type: number, description: Detector threshold; edges at or above it are flagged }
+        source_ip: { type: string }
+        window_edge_count: { type: integer, description: Edges in the whole window before truncation }
+        truncated: { type: boolean }
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [ip, role, internal]
+            properties:
+              ip: { type: string }
+              role: { type: string, enum: [source, target, second_hop, other] }
+              internal: { type: boolean }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [source_ip, destination_ip, attack_probability, flagged, connection_count, service, port,
+                       connection_state, outcome, orig_bytes, resp_bytes, orig_packets, resp_packets, in_two_hop]
+            properties:
+              source_ip: { type: string }
+              destination_ip: { type: string }
+              attack_probability: { type: number, nullable: true }
+              flagged: { type: boolean }
+              connection_count: { type: integer }
+              service: { type: string, nullable: true }
+              port: { type: integer, nullable: true }
+              connection_state: { type: string, nullable: true, example: S0 }
+              outcome: { type: string, enum: [no_reply, refused, completed, unknown], description: "From the Zeek connection state: S0/SH/OTH = no_reply, REJ/RST* = refused, SF/S1-S3 = completed" }
+              orig_bytes: { type: number }
+              resp_bytes: { type: number }
+              orig_packets: { type: integer }
+              resp_packets: { type: integer }
+              in_two_hop: { type: boolean }
+
+    BehaviorCheck:
+      type: object
+      description: >
+        ATT&CK techniques that the incident's traffic pattern matches, searched over all techniques without the
+        detector's technique as a filter. Lets the analyst see when the evidence points somewhere else, including
+        techniques the detector was never trained on.
+      required: [facts, reading, method, candidates, agrees_with_detector]
+      properties:
+        facts: { type: string, description: The traffic in numbers (connections, hosts, ports, failure rate, bytes) }
+        reading:
+          type: array
+          items: { type: string }
+          description: Short analyst reading of the traffic, used as the search query
+        method: { type: string, example: bm25+vector }
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [technique_id, name, rank]
+            properties:
+              technique_id: { type: string, example: T1110 }
+              name: { type: string, example: Brute Force }
+              rank: { type: integer }
+        agrees_with_detector:
+          type: boolean
+          nullable: true
+          description: True when the detector's technique is among the top 3 candidates
+
+    Mitigation:
+      type: object
+      required: [mitigation_id, name]
+      properties:
+        mitigation_id: { type: string, example: M1050 }
+        name: { type: string }
+
+    ModelOutput:
+      type: object
+      required: [model, label]
+      properties:
+        model: { type: string, example: model_3 }
+        label: { type: string, enum: [attack, normal] }
+        attack_probability: { type: number, nullable: true }
+        technique_id: { type: string, nullable: true }
+        confidence: { type: number, nullable: true }
+        explanation_text: { type: string, description: Models with an LLM only (3 and 4) }
+        groundedness: { type: number, nullable: true }
+
+    ActivityEntry:
+      type: object
+      required: [at, status]
+      properties:
+        at: { type: string, format: date-time }
+        actor: { type: string }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        note: { type: string }
+        technique_override: { type: string, nullable: true }
+        mitigations_applied:
+          type: array
+          items: { type: string }
+
+    IncidentDetail:
+      allOf:
+        - $ref: '#/components/schemas/IncidentSummary'
+        - type: object
+          required: [verdict, mitre_candidates, tactic_prediction, edges, evidence, explanation, mitigations, related_incident_ids, models]
+          properties:
+            verdict: { type: string, enum: [attack, normal] }
+            mitre_candidates:
+              type: array
+              maxItems: 3
+              items: { $ref: '#/components/schemas/MitreCandidate' }
+            tactic_prediction: { $ref: '#/components/schemas/TacticPrediction' }
+            edges:
+              type: array
+              items: { $ref: '#/components/schemas/Edge' }
+            evidence:
+              type: array
+              items: { $ref: '#/components/schemas/Evidence' }
+            cve_status: { type: string, enum: [applicable, not_applicable] }
+            explanation: { $ref: '#/components/schemas/Explanation' }
+            retrieval_trace: { $ref: '#/components/schemas/RetrievalTrace' }
+            mitigations:
+              type: array
+              items: { $ref: '#/components/schemas/Mitigation' }
+            related_incident_ids:
+              type: array
+              description: Other incidents sharing an IP within one hour
+              items: { type: string }
+            models:
+              type: array
+              description: Precomputed outputs of Models 1-5 for the Research tab
+              items: { $ref: '#/components/schemas/ModelOutput' }
+            activity:
+              type: array
+              description: Only present when the PATCH endpoint is built
+              items: { $ref: '#/components/schemas/ActivityEntry' }
+
+    IncidentUpdate:
+      type: object
+      description: Partial update; fields that are left out keep their current value
+      properties:
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        technique_override: { type: string, nullable: true, description: Analyst correction of the top technique }
+        note: { type: string }
+        mitigations_applied:
+          type: array
+          items: { type: string }
+
+    ModelMetrics:
+      type: object
+      required: [model]
+      properties:
+        model: { type: string }
+        description: { type: string }
+        detection:
+          type: object
+          nullable: true
+          properties:
+            precision: { type: number }
+            recall: { type: number }
+            macro_f1: { type: number }
+            pr_auc: { type: number }
+            roc_auc: { type: number }
+        technique:
+          type: object
+          nullable: true
+          properties:
+            accuracy: { type: number }
+            macro_f1: { type: number }
+            top3_accuracy: { type: number }
+            top5_accuracy: { type: number }
+            tactic_accuracy: { type: number }
+        retrieval:
+          type: object
+          nullable: true
+          properties:
+            hit_at_5: { type: number }
+            precision_at_5: { type: number }
+            mrr: { type: number }
+            ndcg_at_10: { type: number }
+        explanation:
+          type: object
+          nullable: true
+          properties:
+            groundedness: { type: number }
+            citation_correctness: { type: number }
+        calibration:
+          type: object
+          nullable: true
+          properties:
+            brier: { type: number }
+            ece: { type: number }
+            log_loss: { type: number }
+            reliability_bins:
+              type: array
+              items:
+                type: object
+                properties:
+                  predicted: { type: number }
+                  observed: { type: number }
+                  count: { type: integer }
+        label_sparsity:
+          type: object
+          nullable: true
+          description: Macro-F1 keyed by percent of labels used ("1", "5", "10", "100")
+          additionalProperties: { type: number }
+
+    AblationRow:
+      type: object
+      required: [variant]
+      properties:
+        variant: { type: string, example: gnn_only }
+        macro_f1: { type: number, nullable: true }
+        top3_accuracy: { type: number, nullable: true }
+        groundedness: { type: number, nullable: true }
+        citation_correctness: { type: number, nullable: true }
+
+    KnowledgeBase:
+      type: object
+      properties:
+        built_at: { type: string, format: date }
+        embedding_model: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              source: { type: string, enum: [mitre, procedure, cti, cve] }
+              items: { type: integer }
+              chunks: { type: integer }
+              techniques_linked: { type: integer }
+        coverage:
+          type: array
+          items:
+            type: object
+            properties:
+              technique_id: { type: string }
+              technique_level_chunks: { type: integer }
+              tactic_only: { type: boolean }
+
+    Metrics:
+      type: object
+      required: [primary_model, models]
+      properties:
+        primary_model: { type: string }
+        primary_reason: { type: string, example: Best macro-F1 on test }
+        test_edges: { type: integer }
+        models:
+          type: array
+          items: { $ref: '#/components/schemas/ModelMetrics' }
+        rag_ablation:
+          type: array
+          items: { $ref: '#/components/schemas/AblationRow' }
+        knowledge_base: { $ref: '#/components/schemas/KnowledgeBase' }
