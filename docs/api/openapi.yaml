@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.4.2
+  version: 0.4.3
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
@@ -500,6 +500,11 @@ components:
         window_start: { type: string, format: date-time }
         events: { type: integer }
         attack_edges: { type: integer }
+        high_confidence_edges:
+          type: integer
+          description: >-
+            Flagged edges whose attack probability is at least 0.80 (or the model threshold, if higher).
+            A subset of attack_edges; the overview's traffic chart shows it as the red part of each bar.
 
     EdgePreview:
       type: object
