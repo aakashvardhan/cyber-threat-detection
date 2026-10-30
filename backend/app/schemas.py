@@ -1,4 +1,4 @@
-"""Request and response models from docs/api/openapi.yaml (v0.4.1)."""
+"""Request and response models from docs/api/openapi.yaml (v0.4.2)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -48,12 +48,16 @@ class ReplayState(_Model):
     window_start: str | None
     window_index: int
     window_count: int
+    first_window_start: str | None = None
+    last_window_start: str | None = None
+    day_starts: list[str] | None = None
 
 
 class WindowStats(_Model):
     window_start: str
     events: int
     attack_edges: int
+    high_confidence_edges: int | None = None   # flagged edges with attack probability >= 0.80
 
 
 class EdgePreview(_Model):
@@ -153,6 +157,22 @@ class RetrievalSource(_Model):
     skipped: bool | None = None
 
 
+class BehaviorCandidate(_Model):
+    technique_id: str
+    name: str
+    rank: int
+
+
+class BehaviorCheck(_Model):
+    """ATT&CK techniques the traffic pattern matches, searched without the detector's technique."""
+    NULLABLE = frozenset({"agrees_with_detector"})
+    facts: str
+    reading: list[str]
+    method: str
+    candidates: list[BehaviorCandidate]
+    agrees_with_detector: bool | None = None
+
+
 class RetrievalTrace(_Model):
     query: str
     sources: list[RetrievalSource]
@@ -160,6 +180,7 @@ class RetrievalTrace(_Model):
     min_score: float | None = None
     fallback_to_tactic: bool | None = None
     latency_ms: int | None = None
+    behavior_check: BehaviorCheck | None = None
 
 
 class Mitigation(_Model):
@@ -209,3 +230,39 @@ class IncidentUpdate(_Model):
     technique_override: str | None = None
     note: str | None = None
     mitigations_applied: list[str] | None = None
+
+
+class GraphNode(_Model):
+    ip: str
+    role: Literal["source", "target", "second_hop", "other"]
+    internal: bool
+
+
+class GraphEdge(_Model):
+    NULLABLE = frozenset({"attack_probability", "service", "port", "connection_state"})
+    source_ip: str
+    destination_ip: str
+    attack_probability: float | None = None
+    flagged: bool
+    connection_count: int
+    service: str | None = None
+    port: int | None = None
+    connection_state: str | None = None
+    outcome: Literal["no_reply", "refused", "completed", "unknown"]
+    orig_bytes: float
+    resp_bytes: float
+    orig_packets: int
+    resp_packets: int
+    in_two_hop: bool
+
+
+class WindowGraph(_Model):
+    incident_id: str
+    window_start: str
+    windows: list[str]
+    threshold: float
+    source_ip: str
+    window_edge_count: int
+    truncated: bool
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
