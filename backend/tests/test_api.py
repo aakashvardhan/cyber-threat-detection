@@ -102,7 +102,7 @@ def test_incident_list_shape(client):
     assert body["replay"] == {"window_start": iso(2), "window_index": 3, "window_count": 12,
                               "first_window_start": iso(0), "last_window_start": iso(11), "day_starts": [iso(0)]}
     assert body["primary_model"] == "model_1" and body["threshold"] == 0.5
-    assert body["windows"] == [{"window_start": iso(2), "events": 10, "attack_edges": 6}]
+    assert body["windows"] == [{"window_start": iso(2), "events": 10, "attack_edges": 6, "high_confidence_edges": 6}]
 
 
 def test_incident_detail_with_fallback_explanation(client):

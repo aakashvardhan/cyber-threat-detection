@@ -1,4 +1,4 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.2).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.3).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
@@ -166,7 +166,7 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.4.2",
+    app = FastAPI(title="Threat Detection Console API", version="0.4.3",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["*"])
@@ -216,7 +216,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "primary_model": state.primary_model,
             "threshold": state.detector.threshold,
             "windows": [{"window_start": iso(w), "events": replay.results[w].events,
-                         "attack_edges": replay.results[w].attack_edges} for w in replay.order],
+                         "attack_edges": replay.results[w].attack_edges,
+                         "high_confidence_edges": replay.results[w].high_confidence_edges} for w in replay.order],
             "incidents": [incident_summary(state, i) for i in replay.incidents.values()],
         }
 

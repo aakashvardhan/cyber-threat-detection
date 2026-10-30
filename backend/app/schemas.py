@@ -57,6 +57,7 @@ class WindowStats(_Model):
     window_start: str
     events: int
     attack_edges: int
+    high_confidence_edges: int | None = None   # flagged edges with attack probability >= 0.80
 
 
 class EdgePreview(_Model):

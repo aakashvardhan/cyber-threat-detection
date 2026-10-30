@@ -246,3 +246,20 @@ def test_window_graph_around_the_incident_source(client):
     assert g["window_edge_count"] == 10 and not g["truncated"]
     assert client.get(f"/incidents/{incident_id}/graph", params={"window_start": iso(5)}).status_code == 400
     assert client.get("/incidents/INC-9999/graph").status_code == 404
+
+
+# ---------------------------------------------------------------- traffic chart: high-confidence share
+def test_windows_report_high_confidence_edges(client):
+    for w in range(4):
+        client.post("/detect", json={"window_start": iso(w)})
+    body = client.get("/incidents").json()
+    threshold = max(body["threshold"], 0.80)
+    for w in body["windows"]:
+        assert 0 <= w["high_confidence_edges"] <= w["attack_edges"] <= w["events"]
+    graph_counts = {}
+    for inc in body["incidents"]:
+        g = client.get(f"/incidents/{inc['incident_id']}/graph").json()
+        graph_counts[g["window_start"]] = sum(1 for e in g["edges"] if (e["attack_probability"] or 0) >= threshold)
+    for w in body["windows"]:
+        if w["window_start"] in graph_counts and not w["events"] > 400:
+            assert w["high_confidence_edges"] == graph_counts[w["window_start"]]
