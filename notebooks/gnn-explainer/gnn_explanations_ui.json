@@ -1,0 +1,4396 @@
+[
+  {
+    "event_id": "uwf-test-66034",
+    "row_id": 66034,
+    "event": {
+      "window_start": "2022-01-09T03:45:00",
+      "source_ip": "fe80::f862:2895:ecac:131b",
+      "destination_ip": "ff02::1:2",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 1.0,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9042744636535645,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9246103763580322,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.1492435187101364
+          },
+          {
+            "feature": "incoming_resp_bytes",
+            "importance": 0.1449417769908905
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.14414721727371216
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.1438027173280716
+          },
+          {
+            "feature": "incoming_missed_bytes",
+            "importance": 0.1427450180053711
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.35785332322120667
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.35478052496910095
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.2890731990337372
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.2734333872795105
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.2655080258846283
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::f862:2895:ecac:131b",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.0972871258854866
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.3423108458518982
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.2793021500110626
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.2667429447174072
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.2658875286579132
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.2532784342765808
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.12465336918830872
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.12081724405288696
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.0929795578122139
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.08250574767589569
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.07757877558469772
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::f862:2895:ecac:131b",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.5697171688079834
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.36626678705215454
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.33965981006622314
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.2760550081729889
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.2615821361541748
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.24944114685058594
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.06311029940843582
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.062135182321071625
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.0545525886118412
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.05395768955349922
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.05014117434620857
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::f862:2895:ecac:131b",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.8139438629150391
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 11.684760093688965,
+          "masked_logit": 20.465120315551758,
+          "logit_drop": -8.780360221862793,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 1.5829604864120483,
+          "masked_logit": 4.731028079986572,
+          "logit_drop": -3.148067593574524,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 3.125396728515625,
+          "masked_logit": 0.7929375171661377,
+          "logit_drop": 2.3324592113494873,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-66036",
+    "row_id": 66036,
+    "event": {
+      "window_start": "2024-02-28T10:05:00",
+      "source_ip": "143.88.1.18",
+      "destination_ip": "143.88.2.1",
+      "ground_truth": {
+        "label_binary": 1,
+        "label_tactic": [
+          "Reconnaissance"
+        ],
+        "label_technique": [
+          "T1595"
+        ]
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999998807907104,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9280074238777161,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9386882185935974,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.14597353339195251
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.1443280279636383
+          },
+          {
+            "feature": "unique_sources",
+            "importance": 0.14152708649635315
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.14069348573684692
+          },
+          {
+            "feature": "incoming_duration",
+            "importance": 0.13971787691116333
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.3280010521411896
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.2943817377090454
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.2818792462348938
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.2576475739479065
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.23913727700710297
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.18",
+            "destination_ip": "143.88.2.1",
+            "importance": 0.8444432616233826
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.3554159998893738
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.27262064814567566
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.26472941040992737
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.2559594213962555
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.25591444969177246
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.14056219160556793
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.10612814128398895
+          },
+          {
+            "feature": "unique_destination_ports",
+            "importance": 0.10157354176044464
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.07281734049320221
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.06721745431423187
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.18",
+            "destination_ip": "143.88.2.1",
+            "importance": 0.48492932319641113
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.35805565118789673
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.2825544476509094
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.2807633876800537
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.24642792344093323
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.24318930506706238
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.050655074417591095
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.04934930428862572
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.04702285677194595
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.045512937009334564
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.04268394410610199
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.18",
+            "destination_ip": "143.88.2.1",
+            "importance": 0.5045840740203857
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 16.09783935546875,
+          "masked_logit": 11.796489715576172,
+          "logit_drop": 4.301349639892578,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 3.4613332748413086,
+          "masked_logit": 2.25712513923645,
+          "logit_drop": 1.2042081356048584,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 7.037466526031494,
+          "masked_logit": 3.5078301429748535,
+          "logit_drop": 3.5296363830566406,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-69126",
+    "row_id": 69126,
+    "event": {
+      "window_start": "2025-05-30T11:35:00",
+      "source_ip": "143.88.10.10",
+      "destination_ip": "143.88.255.10",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999995231628418,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9011790156364441,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9079248309135437,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "incoming_udp_count",
+            "importance": 0.3092953562736511
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.3089643716812134
+          },
+          {
+            "feature": "outgoing_duration",
+            "importance": 0.29126277565956116
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.28898879885673523
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.28612077236175537
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.4472714960575104
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.3649079501628876
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3444209098815918
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.34157589077949524
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.32938867807388306
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.10.10",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.19469349086284637
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.727035641670227
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.5183170437812805
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.5155123472213745
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.5056955218315125
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.5055321455001831
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.08530794829130173
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.08060230314731598
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.0805821567773819
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.07012175768613815
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.05219533294439316
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.10.10",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7685680985450745
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.7024695873260498
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.5332614779472351
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.5246069431304932
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.5110641121864319
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.5010026693344116
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.07416913658380508
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.06429330259561539
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.05975719541311264
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.04427230358123779
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.043714191764593124
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.10.10",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.8319498896598816
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 13.783419609069824,
+          "masked_logit": 19.06062126159668,
+          "logit_drop": -5.2772016525268555,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.0930287837982178,
+          "masked_logit": 4.7868266105651855,
+          "logit_drop": -2.6937978267669678,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 1.4971050024032593,
+          "masked_logit": 3.220059394836426,
+          "logit_drop": -1.7229543924331665,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-67261",
+    "row_id": 67261,
+    "event": {
+      "window_start": "2024-12-03T01:25:00",
+      "source_ip": "143.88.5.11",
+      "destination_ip": "143.88.5.1",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999951124191284,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9826948046684265,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9772717952728271,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.2027709186077118
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.1345471441745758
+          },
+          {
+            "feature": "incoming_resp_bytes",
+            "importance": 0.12102198600769043
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.118486687541008
+          },
+          {
+            "feature": "incoming_udp_count",
+            "importance": 0.11475293338298798
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.23773637413978577
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.23321181535720825
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.21542054414749146
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.19761383533477783
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.18169014155864716
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.11",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.19416356086730957
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.23162373900413513
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.20418965816497803
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.2006290853023529
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.1980224847793579
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.19709312915802002
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.09959344565868378
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06238565593957901
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.059420570731163025
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.05761994421482086
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.048240356147289276
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.11",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.7456825971603394
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.2834841012954712
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.25543299317359924
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.22535178065299988
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.20454521477222443
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.20050306618213654
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.04225261136889458
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.03845057636499405
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.0382167249917984
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.03551588952541351
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.03423001617193222
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.11",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.6766343116760254
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 14.593972206115723,
+          "masked_logit": 5.180347919464111,
+          "logit_drop": 9.413624286651611,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.41943097114563,
+          "masked_logit": 3.843554973602295,
+          "logit_drop": -1.424124002456665,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 7.108689308166504,
+          "masked_logit": 0.016938121989369392,
+          "logit_drop": 7.0917511861771345,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-67264",
+    "row_id": 67264,
+    "event": {
+      "window_start": "2024-12-02T12:30:00",
+      "source_ip": "143.88.1.12",
+      "destination_ip": "143.88.1.1",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999948740005493,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9806444048881531,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9740508794784546,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.12550315260887146
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.1235646978020668
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.11961531639099121
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.11483259499073029
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.11474033445119858
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.3940114378929138
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.3350279927253723
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.32149654626846313
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3143024444580078
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.29703718423843384
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.12",
+            "destination_ip": "143.88.1.1",
+            "importance": 0.889187753200531
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.2215966433286667
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.20048967003822327
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.19257986545562744
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.19241587817668915
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.1856815218925476
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.08993689715862274
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.07305652648210526
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06850124150514603
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.06316452473402023
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.036440495401620865
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.12",
+            "destination_ip": "143.88.1.1",
+            "importance": 0.8464816808700562
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.2728337347507477
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.2707098126411438
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.2140779048204422
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.213467076420784
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.20690903067588806
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.09141203761100769
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.08233798295259476
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.07709108293056488
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.0654752254486084
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.06359118968248367
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.12",
+            "destination_ip": "143.88.1.1",
+            "importance": 0.7025895118713379
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 12.091082572937012,
+          "masked_logit": 10.122675895690918,
+          "logit_drop": 1.9684066772460938,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 4.112531661987305,
+          "masked_logit": 4.5451340675354,
+          "logit_drop": -0.4326024055480957,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 3.1650116443634033,
+          "masked_logit": -0.06099769473075867,
+          "logit_drop": 3.226009339094162,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-58747",
+    "row_id": 58747,
+    "event": {
+      "window_start": "2025-06-07T11:55:00",
+      "source_ip": "143.88.0.18",
+      "destination_ip": "8.8.8.8",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999896287918091,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Credential Access",
+        "confidence": 0.8449363708496094,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.8060954213142395,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.08772096037864685
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.0754503607749939
+          },
+          {
+            "feature": "outgoing_orig_packets",
+            "importance": 0.06996509432792664
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.06807214021682739
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.06568478047847748
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.4788399934768677
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.41526779532432556
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.41484907269477844
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3708340525627136
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.36388084292411804
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.11",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.18758590519428253
+          },
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "8.8.8.8",
+            "importance": 0.16475723683834076
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 2,
+        "important_node_features": [
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.09806550294160843
+          },
+          {
+            "feature": "incoming_resp_packets",
+            "importance": 0.09630819410085678
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.09474534541368484
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.09457749873399734
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.0935995951294899
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.14574341475963593
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.13311496376991272
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.12729176878929138
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.11501549929380417
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.11044158041477203
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.11",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7923200726509094
+          },
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "8.8.8.8",
+            "importance": 0.21761932969093323
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.14532537758350372
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.13586875796318054
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.12195984274148941
+          },
+          {
+            "feature": "incoming_edge_count",
+            "importance": 0.11234138906002045
+          },
+          {
+            "feature": "unique_sources",
+            "importance": 0.11098583042621613
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.054678045213222504
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.05135597288608551
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.050111688673496246
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.047330353409051895
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.04207318276166916
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.11",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7625005841255188
+          },
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "8.8.8.8",
+            "importance": 0.69532710313797
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 13.829732894897461,
+          "masked_logit": 7.294856548309326,
+          "logit_drop": 6.534876346588135,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 0.8067368865013123,
+          "masked_logit": -1.8578859567642212,
+          "logit_drop": 2.6646228432655334,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 2.2697956562042236,
+          "masked_logit": 1.0752583742141724,
+          "logit_drop": 1.1945372819900513,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-67262",
+    "row_id": 67262,
+    "event": {
+      "window_start": "2024-12-04T18:15:00",
+      "source_ip": "143.88.5.14",
+      "destination_ip": "143.88.5.1",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999873638153076,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9835193753242493,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9768595099449158,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.18380215764045715
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.17738501727581024
+          },
+          {
+            "feature": "incoming_edge_count",
+            "importance": 0.11997709423303604
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.1186765655875206
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.11766108125448227
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.46189290285110474
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.4455012381076813
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.4136620759963989
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.3767189085483551
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.3597400188446045
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.14",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.16634272038936615
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.19684496521949768
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.18993976712226868
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.18551607429981232
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.18406732380390167
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.17946091294288635
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.11684168875217438
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.09481529146432877
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.09401819109916687
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.08547435700893402
+          },
+          {
+            "feature": "most_common_service_dns",
+            "importance": 0.05180725082755089
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.14",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.3668596148490906
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.26114100217819214
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.22340312600135803
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.21826449036598206
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.19919314980506897
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.1962454617023468
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.046191900968551636
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.03546416014432907
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.03472903370857239
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.033370278775691986
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.028583411127328873
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.14",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.7408922910690308
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 6.882030963897705,
+          "masked_logit": 13.885072708129883,
+          "logit_drop": -7.003041744232178,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 4.7373809814453125,
+          "masked_logit": 6.784175872802734,
+          "logit_drop": -2.046794891357422,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 1.0256705284118652,
+          "masked_logit": 4.903442859649658,
+          "logit_drop": -3.877772331237793,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-66035",
+    "row_id": 66035,
+    "event": {
+      "window_start": "2022-01-09T05:50:00",
+      "source_ip": "fe80::f862:2895:ecac:131b",
+      "destination_ip": "ff02::1:2",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999840259552002,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9457461833953857,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9413613080978394,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.23180672526359558
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.21765361726284027
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.20955128967761993
+          },
+          {
+            "feature": "incoming_resp_bytes",
+            "importance": 0.19467610120773315
+          },
+          {
+            "feature": "incoming_missed_bytes",
+            "importance": 0.16192132234573364
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.35025647282600403
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.34409138560295105
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.2805681526660919
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.2715088427066803
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.26514866948127747
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::f862:2895:ecac:131b",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.19421419501304626
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.3498165011405945
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.2925127148628235
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.2563484311103821
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.25518885254859924
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.2473832666873932
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.127131849527359
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.11018994450569153
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.09845352172851562
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.0774996280670166
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.06272164732217789
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::f862:2895:ecac:131b",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.7787848711013794
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.34976136684417725
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.33396247029304504
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.2674379050731659
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.26626187562942505
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.26421892642974854
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.13030308485031128
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.09864060580730438
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.09815296530723572
+          },
+          {
+            "feature": "most_common_service_dns",
+            "importance": 0.08384372293949127
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.0797436535358429
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::f862:2895:ecac:131b",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.7069511413574219
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 8.705572128295898,
+          "masked_logit": 11.05652141571045,
+          "logit_drop": -2.350949287414551,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": -0.08627702295780182,
+          "masked_logit": 5.365204811096191,
+          "logit_drop": -5.451481834053993,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": -0.47577887773513794,
+          "masked_logit": 4.483962535858154,
+          "logit_drop": -4.959741413593292,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-67263",
+    "row_id": 67263,
+    "event": {
+      "window_start": "2024-12-04T13:05:00",
+      "source_ip": "143.88.9.11",
+      "destination_ip": "143.88.9.1",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999812841415405,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9844373464584351,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.976749062538147,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.16538956761360168
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.13633371889591217
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.11762166023254395
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.11754463613033295
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.11444123089313507
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.5643625259399414
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.48536416888237
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.4490779936313629
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.44465044140815735
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.40456873178482056
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.9.11",
+            "destination_ip": "143.88.9.1",
+            "importance": 0.8403887748718262
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.20280671119689941
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.1919349879026413
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.19039252400398254
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.18904347717761993
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.1864350289106369
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.0783892497420311
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.04812827333807945
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.045410968363285065
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.04250642657279968
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.035959914326667786
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.9.11",
+            "destination_ip": "143.88.9.1",
+            "importance": 0.5396849513053894
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.2693028450012207
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.2506912350654602
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.20470134913921356
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.20347900688648224
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.19921334087848663
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06939929723739624
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.05879802256822586
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.05805414542555809
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.05750517547130585
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.05544659495353699
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.9.11",
+            "destination_ip": "143.88.9.1",
+            "importance": 0.7209721207618713
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 17.704421997070312,
+          "masked_logit": 6.6954240798950195,
+          "logit_drop": 11.008997917175293,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.6511645317077637,
+          "masked_logit": 3.7867095470428467,
+          "logit_drop": -1.135545015335083,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 2.569553852081299,
+          "masked_logit": 3.6038315296173096,
+          "logit_drop": -1.0342776775360107,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-68439",
+    "row_id": 68439,
+    "event": {
+      "window_start": "2025-06-02T19:45:00",
+      "source_ip": "143.88.0.18",
+      "destination_ip": "8.8.8.8",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999812841415405,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.8761257529258728,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.8754361867904663,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.3064497113227844
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.19618280231952667
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.1951102763414383
+          },
+          {
+            "feature": "incoming_udp_count",
+            "importance": 0.194899782538414
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.19475920498371124
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.3800453841686249
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.3581435978412628
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.31713539361953735
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.3084080219268799
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.2953486144542694
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "8.8.8.8",
+            "importance": 0.19477024674415588
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4764045774936676
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.47373756766319275
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.3560980558395386
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.3419853150844574
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.3337724208831787
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.12966978549957275
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.11734823882579803
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.11459220945835114
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.09203679114580154
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.07603661715984344
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "8.8.8.8",
+            "importance": 0.751690149307251
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4658330976963043
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.4624776840209961
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.34771546721458435
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.3416809141635895
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.3370912969112396
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.11790581047534943
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.09383165091276169
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.09140148013830185
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.07022958248853683
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.06896577030420303
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "8.8.8.8",
+            "importance": 0.5572112202644348
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 6.971667289733887,
+          "masked_logit": 10.805359840393066,
+          "logit_drop": -3.8336925506591797,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": -1.353473424911499,
+          "masked_logit": 3.50905179977417,
+          "logit_drop": -4.862525224685669,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": -1.0117508172988892,
+          "masked_logit": 2.671231746673584,
+          "logit_drop": -3.682982563972473,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-67517",
+    "row_id": 67517,
+    "event": {
+      "window_start": "2021-12-17T20:15:00",
+      "source_ip": "fe80::cc00:7eec:36b8:5325",
+      "destination_ip": "ff02::1:2",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999804496765137,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Credential Access",
+        "confidence": 0.8350472450256348,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.7944050431251526,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.054094359278678894
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.051657773554325104
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.04955516383051872
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.04865128919482231
+          },
+          {
+            "feature": "outgoing_orig_packets",
+            "importance": 0.04853351414203644
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.4995619058609009
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.4515417218208313
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.40799206495285034
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3892083168029785
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.3778233826160431
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.4.13",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.8166600465774536
+          },
+          {
+            "source_ip": "fe80::cc00:7eec:36b8:5325",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.8140829801559448
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 2,
+        "important_node_features": [
+          {
+            "feature": "incoming_resp_packets",
+            "importance": 0.07155506312847137
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.07019121199846268
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.06939402967691422
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.0690634548664093
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.06643886119127274
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.13162106275558472
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.12922781705856323
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.12216213345527649
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.10123301297426224
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.09089674800634384
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "fe80::cc00:7eec:36b8:5325",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.23053783178329468
+          },
+          {
+            "source_ip": "143.88.4.13",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.19957846403121948
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.10297232121229172
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.09985924512147903
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.09041807800531387
+          },
+          {
+            "feature": "unique_sources",
+            "importance": 0.07863935828208923
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.07677909731864929
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.049855731427669525
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.04742948338389397
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.046289268881082535
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.040752895176410675
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.04055705666542053
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.4.13",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7564437985420227
+          },
+          {
+            "source_ip": "fe80::cc00:7eec:36b8:5325",
+            "destination_ip": "ff02::1:2",
+            "importance": 0.7305786609649658
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 13.8826322555542,
+          "masked_logit": 9.972949028015137,
+          "logit_drop": 3.9096832275390625,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 3.138471841812134,
+          "masked_logit": -0.20976907014846802,
+          "logit_drop": 3.348240911960602,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 2.0384809970855713,
+          "masked_logit": 2.549205780029297,
+          "logit_drop": -0.5107247829437256,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-68799",
+    "row_id": 68799,
+    "event": {
+      "window_start": "2025-06-01T14:30:00",
+      "source_ip": "143.88.0.18",
+      "destination_ip": "198.41.0.4",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999793767929077,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9176868200302124,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.9143000841140747,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.3120304048061371
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.2863123118877411
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.2757607400417328
+          },
+          {
+            "feature": "incoming_resp_bytes",
+            "importance": 0.24046997725963593
+          },
+          {
+            "feature": "incoming_missed_bytes",
+            "importance": 0.21153771877288818
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.36416029930114746
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.29236435890197754
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.2810536026954651
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.2536928653717041
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.23970502614974976
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "198.41.0.4",
+            "importance": 0.09157023578882217
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4668619632720947
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.4238063395023346
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.39197874069213867
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.362886518239975
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.35005807876586914
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.13653883337974548
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.08923331648111343
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.08623313903808594
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.08294511586427689
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.07841268181800842
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "198.41.0.4",
+            "importance": 0.7097818851470947
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.4754798412322998
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.45844826102256775
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.4454226493835449
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.3500742018222809
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.3359467685222626
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.06528826802968979
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.05009140819311142
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.04870866611599922
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.04672842472791672
+          },
+          {
+            "feature": "most_common_service_dns",
+            "importance": 0.044994138181209564
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "198.41.0.4",
+            "importance": 0.7672123908996582
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 8.26728630065918,
+          "masked_logit": 2.070594072341919,
+          "logit_drop": 6.196692228317261,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.0119643211364746,
+          "masked_logit": 3.5827295780181885,
+          "logit_drop": -1.5707652568817139,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": -0.5800729990005493,
+          "masked_logit": 2.1847236156463623,
+          "logit_drop": -2.7647966146469116,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-68798",
+    "row_id": 68798,
+    "event": {
+      "window_start": "2025-06-01T17:35:00",
+      "source_ip": "143.88.0.18",
+      "destination_ip": "199.7.83.42",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999682903289795,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.8038827180862427,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.817200243473053,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.303019255399704
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.19414359331130981
+          },
+          {
+            "feature": "incoming_icmp_count",
+            "importance": 0.1930907815694809
+          },
+          {
+            "feature": "outgoing_orig_packets",
+            "importance": 0.192103311419487
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.18980729579925537
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.418887197971344
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.34875932335853577
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.33165445923805237
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.3288195729255676
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.2971252501010895
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "199.7.83.42",
+            "importance": 0.1908942312002182
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.47033700346946716
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.44607266783714294
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.369220107793808
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.35347041487693787
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.338275283575058
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.1651107221841812
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.10520000755786896
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.10016796737909317
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.0897381603717804
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.0880107581615448
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "199.7.83.42",
+            "importance": 0.7927531003952026
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.4654705822467804
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4602295458316803
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.45858803391456604
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.3468798100948334
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.3343672752380371
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.09685277938842773
+          },
+          {
+            "feature": "most_common_service_dns",
+            "importance": 0.08631999045610428
+          },
+          {
+            "feature": "unique_destination_ports",
+            "importance": 0.05694568157196045
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.05537160485982895
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.048583462834358215
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "199.7.83.42",
+            "importance": 0.8948232531547546
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 8.949315071105957,
+          "masked_logit": 5.997793674468994,
+          "logit_drop": 2.951521396636963,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": -1.3853821754455566,
+          "masked_logit": 2.0584611892700195,
+          "logit_drop": -3.443843364715576,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 1.9091233015060425,
+          "masked_logit": 2.240020751953125,
+          "logit_drop": -0.3308974504470825,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-1327",
+    "row_id": 1327,
+    "event": {
+      "window_start": "2024-11-26T16:15:00",
+      "source_ip": "143.88.5.11",
+      "destination_ip": "143.88.5.1",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999655485153198,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Credential Access",
+        "confidence": 0.8797980546951294,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1110",
+        "confidence": 0.8093181848526001,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.022288834676146507
+          },
+          {
+            "feature": "incoming_resp_bytes",
+            "importance": 0.022024275735020638
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.021653426811099052
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.021502617746591568
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.02136620692908764
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.4042966663837433
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.334867388010025
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3140780031681061
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.31160277128219604
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.27783751487731934
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.11",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.7956776022911072
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 2,
+        "important_node_features": [
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.036387648433446884
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.03562133014202118
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.03494427353143692
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.03479251638054848
+          },
+          {
+            "feature": "incoming_resp_packets",
+            "importance": 0.034741804003715515
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.22933216392993927
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.21101291477680206
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.2035752236843109
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.18428705632686615
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.15896837413311005
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.11",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.19143374264240265
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 7,
+        "important_node_features": [
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.03619210422039032
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.03577205538749695
+          },
+          {
+            "feature": "incoming_resp_packets",
+            "importance": 0.035274438560009
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.035212352871894836
+          },
+          {
+            "feature": "incoming_duration",
+            "importance": 0.033075880259275436
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "tcp_count",
+            "importance": 0.09020905941724777
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.08337150514125824
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.08224466443061829
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.08079735934734344
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.07866857945919037
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.5.11",
+            "destination_ip": "143.88.5.1",
+            "importance": 0.8456828594207764
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 6.916456699371338,
+          "masked_logit": 11.858649253845215,
+          "logit_drop": -4.942192554473877,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 3.177090883255005,
+          "masked_logit": -1.0201709270477295,
+          "logit_drop": 4.197261810302734,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 2.733114004135132,
+          "masked_logit": -2.093742609024048,
+          "logit_drop": 4.82685661315918,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-69149",
+    "row_id": 69149,
+    "event": {
+      "window_start": "2025-06-02T11:40:00",
+      "source_ip": "143.88.0.6",
+      "destination_ip": "192.58.128.30",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999607801437378,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.8129907846450806,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.8277063965797424,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.31278517842292786
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.2294277399778366
+          },
+          {
+            "feature": "outgoing_icmp_count",
+            "importance": 0.20118272304534912
+          },
+          {
+            "feature": "incoming_duration",
+            "importance": 0.19588036835193634
+          },
+          {
+            "feature": "incoming_udp_count",
+            "importance": 0.19466638565063477
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.43344593048095703
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.38701632618904114
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.37211260199546814
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.36370211839675903
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.3128725290298462
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.6",
+            "destination_ip": "192.58.128.30",
+            "importance": 0.11103282123804092
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4835893213748932
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.4609188735485077
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.3541843891143799
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.33859148621559143
+          },
+          {
+            "feature": "outgoing_connection_count",
+            "importance": 0.33630791306495667
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.05122518539428711
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.041321899741888046
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.03941355645656586
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.03917457163333893
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.033736370503902435
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.6",
+            "destination_ip": "192.58.128.30",
+            "importance": 0.7808868288993835
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.48925676941871643
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.47078847885131836
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.3642534017562866
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.34204089641571045
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.3384973704814911
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.09733403474092484
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.09613406658172607
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.08870349079370499
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.07602347433567047
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.07513374090194702
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.6",
+            "destination_ip": "192.58.128.30",
+            "importance": 0.8023458123207092
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 13.02669620513916,
+          "masked_logit": 10.799766540527344,
+          "logit_drop": 2.2269296646118164,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 1.8096009492874146,
+          "masked_logit": 0.32744401693344116,
+          "logit_drop": 1.4821569323539734,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 1.9170198440551758,
+          "masked_logit": 1.5963493585586548,
+          "logit_drop": 0.320670485496521,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-68834",
+    "row_id": 68834,
+    "event": {
+      "window_start": "2025-05-26T14:20:00",
+      "source_ip": "143.88.0.6",
+      "destination_ip": "192.33.4.12",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999592304229736,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.9009155035018921,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.8939398527145386,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.14510215818881989
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.14387080073356628
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.143370121717453
+          },
+          {
+            "feature": "incoming_resp_bytes",
+            "importance": 0.14294323325157166
+          },
+          {
+            "feature": "incoming_icmp_count",
+            "importance": 0.14246545732021332
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.27904438972473145
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.24314115941524506
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.22282131016254425
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.2192905992269516
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.21466276049613953
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.6",
+            "destination_ip": "192.33.4.12",
+            "importance": 0.7928933501243591
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.35005879402160645
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.33526790142059326
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.33115845918655396
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.24971222877502441
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.24626728892326355
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.12427009642124176
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.08320249617099762
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.08096373826265335
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.08072429150342941
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.07832992076873779
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.6",
+            "destination_ip": "192.33.4.12",
+            "importance": 0.7930144667625427
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.35103902220726013
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.3463098108768463
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.32332998514175415
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.25191551446914673
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.24310947954654694
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.11392463743686676
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.09751158207654953
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.08765946328639984
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.06948515772819519
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.0669340044260025
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.6",
+            "destination_ip": "192.33.4.12",
+            "importance": 0.7768004536628723
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 6.740933895111084,
+          "masked_logit": 8.006780624389648,
+          "logit_drop": -1.2658467292785645,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 0.9105700850486755,
+          "masked_logit": 2.908423900604248,
+          "logit_drop": -1.9978538155555725,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 1.9161721467971802,
+          "masked_logit": 2.6878116130828857,
+          "logit_drop": -0.7716394662857056,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-18889",
+    "row_id": 18889,
+    "event": {
+      "window_start": "2025-05-25T01:55:00",
+      "source_ip": "143.88.1.11",
+      "destination_ip": "143.88.255.10",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.999954104423523,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.7462319135665894,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.7892621755599976,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.022088157013058662
+          },
+          {
+            "feature": "outgoing_duration",
+            "importance": 0.01861913502216339
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.018258437514305115
+          },
+          {
+            "feature": "incoming_missed_bytes",
+            "importance": 0.01825615018606186
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.018244467675685883
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.36428767442703247
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.32241547107696533
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.2910376191139221
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.2826114296913147
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.27184826135635376
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.11",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7920364141464233
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.04628993570804596
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.040070272982120514
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.037241026759147644
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.03374098986387253
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.032863665372133255
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.12513093650341034
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.07485371083021164
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.07145524770021439
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.06871382892131805
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06629437208175659
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.11",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.8459005355834961
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.04665567725896835
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.04654508829116821
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.04581981897354126
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.036036789417266846
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.03358214721083641
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.07967639714479446
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.07477684319019318
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06915774941444397
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.05307600647211075
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.052395761013031006
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.1.11",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7061892151832581
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 16.194881439208984,
+          "masked_logit": 12.749091148376465,
+          "logit_drop": 3.4457902908325195,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.412864923477173,
+          "masked_logit": 1.5034910440444946,
+          "logit_drop": 0.9093738794326782,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 0.20911359786987305,
+          "masked_logit": 4.033910274505615,
+          "logit_drop": -3.824796676635742,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-69014",
+    "row_id": 69014,
+    "event": {
+      "window_start": "2025-05-29T02:40:00",
+      "source_ip": "143.88.0.18",
+      "destination_ip": "143.88.255.10",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999502897262573,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.8962684273719788,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.8978361487388611,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.20770438015460968
+          },
+          {
+            "feature": "outgoing_orig_bytes",
+            "importance": 0.19542644917964935
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.19532518088817596
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.19413430988788605
+          },
+          {
+            "feature": "incoming_icmp_count",
+            "importance": 0.18871764838695526
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.46962210536003113
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.4334213435649872
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3874069154262543
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.3862539529800415
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.36608022451400757
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.8929252624511719
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.47820329666137695
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.3793894350528717
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.37285205721855164
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.3522671163082123
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.345039039850235
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.11567497253417969
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.10986031591892242
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.10500127077102661
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.08946996182203293
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.07522638142108917
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.6075171828269958
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.49561023712158203
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4657735824584961
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.4589920938014984
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.34042254090309143
+          },
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.32805681228637695
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.09166896343231201
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.08230636268854141
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.07654820382595062
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.06644211709499359
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.06382773071527481
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.0.18",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.8015745878219604
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 16.2970027923584,
+          "masked_logit": 8.854592323303223,
+          "logit_drop": 7.442410469055176,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": -0.03348590433597565,
+          "masked_logit": 1.287697196006775,
+          "logit_drop": -1.3211831003427505,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 2.723893642425537,
+          "masked_logit": 2.4860758781433105,
+          "logit_drop": 0.23781776428222656,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-67260",
+    "row_id": 67260,
+    "event": {
+      "window_start": "2024-12-02T13:10:00",
+      "source_ip": "143.88.255.11",
+      "destination_ip": "8.8.4.4",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.9999499320983887,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Reconnaissance",
+        "confidence": 0.8285620808601379,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.8348774909973145,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.3078291416168213
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.24020695686340332
+          },
+          {
+            "feature": "incoming_missed_bytes",
+            "importance": 0.19847166538238525
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.19647116959095
+          },
+          {
+            "feature": "outgoing_orig_packets",
+            "importance": 0.1941666603088379
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.3798449635505676
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.3367006778717041
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.33213192224502563
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.30285730957984924
+          },
+          {
+            "feature": "tcp_count",
+            "importance": 0.2981024980545044
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.255.11",
+            "destination_ip": "8.8.4.4",
+            "importance": 0.20135173201560974
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 11,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.45676007866859436
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.4531690776348114
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.3382997214794159
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.3363604247570038
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.33615103363990784
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.14376437664031982
+          },
+          {
+            "feature": "most_common_service_dns",
+            "importance": 0.0826883614063263
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.07729396969079971
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.0739704892039299
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.07232873886823654
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.255.11",
+            "destination_ip": "8.8.4.4",
+            "importance": 0.9292793869972229
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.47505107522010803
+          },
+          {
+            "feature": "unique_destinations",
+            "importance": 0.4491465091705322
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.3642229735851288
+          },
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.3430781364440918
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.3402997553348541
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.06411764025688171
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06366321444511414
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.0579480305314064
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.054204780608415604
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.05146490037441254
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.255.11",
+            "destination_ip": "8.8.4.4",
+            "importance": 0.7853969931602478
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 6.03622579574585,
+          "masked_logit": 9.531503677368164,
+          "logit_drop": -3.4952778816223145,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.5214030742645264,
+          "masked_logit": 3.9531209468841553,
+          "logit_drop": -1.431717872619629,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 4.252505302429199,
+          "masked_logit": 1.3873776197433472,
+          "logit_drop": 2.865127682685852,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  },
+  {
+    "event_id": "uwf-test-66570",
+    "row_id": 66570,
+    "event": {
+      "window_start": "2024-11-03T17:05:00",
+      "source_ip": "143.88.6.10",
+      "destination_ip": "143.88.255.10",
+      "ground_truth": {
+        "label_binary": 0,
+        "label_tactic": [],
+        "label_technique": []
+      }
+    },
+    "gnn_detection": {
+      "binary_prediction": {
+        "label": "attack",
+        "attack_probability": 0.99994957447052,
+        "confidence_type": "sigmoid"
+      },
+      "tactic_prediction": {
+        "label": "Credential Access",
+        "confidence": 0.8092867732048035,
+        "confidence_type": "independent_sigmoid"
+      },
+      "mitre_prediction": {
+        "technique_id": "T1595",
+        "confidence": 0.7450746893882751,
+        "confidence_type": "independent_sigmoid"
+      }
+    },
+    "explanations": {
+      "binary": {
+        "task": "binary",
+        "target_index": 1,
+        "important_node_features": [
+          {
+            "feature": "outgoing_tcp_count",
+            "importance": 0.0761878490447998
+          },
+          {
+            "feature": "incoming_resp_packets",
+            "importance": 0.07521961629390717
+          },
+          {
+            "feature": "incoming_udp_count",
+            "importance": 0.0748421922326088
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.07339547574520111
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.07303640246391296
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "udp_count",
+            "importance": 0.48908522725105286
+          },
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.3921601474285126
+          },
+          {
+            "feature": "connection_count",
+            "importance": 0.3908417820930481
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.384490966796875
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.3678770959377289
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.6.10",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.8210440874099731
+          }
+        ]
+      },
+      "tactic": {
+        "task": "tactic",
+        "target_index": 2,
+        "important_node_features": [
+          {
+            "feature": "incoming_tcp_count",
+            "importance": 0.1260584592819214
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.120426706969738
+          },
+          {
+            "feature": "incoming_connection_count",
+            "importance": 0.11829355359077454
+          },
+          {
+            "feature": "incoming_resp_ip_bytes",
+            "importance": 0.11573553830385208
+          },
+          {
+            "feature": "incoming_resp_packets",
+            "importance": 0.11391644179821014
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.16553017497062683
+          },
+          {
+            "feature": "total_orig_ip_bytes",
+            "importance": 0.16154669225215912
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.14777445793151855
+          },
+          {
+            "feature": "total_orig_packets",
+            "importance": 0.13656052947044373
+          },
+          {
+            "feature": "total_resp_packets",
+            "importance": 0.1302081048488617
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.6.10",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.20695389807224274
+          }
+        ]
+      },
+      "mitre": {
+        "task": "mitre",
+        "target_index": 26,
+        "important_node_features": [
+          {
+            "feature": "unique_destinations",
+            "importance": 0.18376216292381287
+          },
+          {
+            "feature": "outgoing_udp_count",
+            "importance": 0.18303751945495605
+          },
+          {
+            "feature": "outgoing_orig_ip_bytes",
+            "importance": 0.17460280656814575
+          },
+          {
+            "feature": "outgoing_edge_count",
+            "importance": 0.13301554322242737
+          },
+          {
+            "feature": "outgoing_missed_bytes",
+            "importance": 0.1291658729314804
+          }
+        ],
+        "important_edge_features": [
+          {
+            "feature": "most_common_destination_port",
+            "importance": 0.07578172534704208
+          },
+          {
+            "feature": "total_orig_bytes",
+            "importance": 0.06960730254650116
+          },
+          {
+            "feature": "total_resp_bytes",
+            "importance": 0.062224339693784714
+          },
+          {
+            "feature": "udp_count",
+            "importance": 0.06214464455842972
+          },
+          {
+            "feature": "most_common_service_unknown",
+            "importance": 0.057085487991571426
+          }
+        ],
+        "important_neighbor_edges": [
+          {
+            "source_ip": "143.88.6.10",
+            "destination_ip": "143.88.255.10",
+            "importance": 0.7996275424957275
+          }
+        ]
+      },
+      "faithfulness": {
+        "binary": {
+          "original_logit": 9.553303718566895,
+          "masked_logit": 8.915670394897461,
+          "logit_drop": 0.6376333236694336,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "tactic": {
+          "original_logit": 2.4448018074035645,
+          "masked_logit": -0.23565059900283813,
+          "logit_drop": 2.6804524064064026,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        },
+        "mitre": {
+          "original_logit": 1.0577661991119385,
+          "masked_logit": 0.5519838333129883,
+          "logit_drop": 0.5057823657989502,
+          "interpretation": "positive drop means the selected features supported the prediction"
+        }
+      }
+    }
+  }
+]
