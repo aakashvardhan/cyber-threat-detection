@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client.js';
 import { ErrorNote, SeverityChip } from '../components/badges.jsx';
 import EvidenceFunnel from '../components/EvidenceFunnel.jsx';
+import WindowGraph from '../components/WindowGraph.jsx';
 import { WarnTriangle } from '../components/icons.jsx';
 import { useReplay } from '../state/ReplayContext.jsx';
 import { bytes, dateTime, hhmm, num, pct, plural, prob, service, shortDate, timeSpan } from '../utils/format.js';
@@ -144,7 +145,10 @@ export default function IncidentDetail() {
 
       <div className="page">
         <ErrorNote message={actionError} />
-        {tab === 'triage' && <Triage inc={inc} onRegenerate={() => load({ refresh: true })} />}
+        {tab === 'triage' && (
+          <Triage inc={inc} saving={saving} onRegenerate={() => load({ refresh: true })}
+            onUseTechnique={(t) => update({ technique_override: t === inc.technique_id ? null : t })} />
+        )}
         {tab === 'response' && <Response inc={inc} saving={saving} update={update} />}
         {tab === 'research' && <Research inc={inc} />}
       </div>
@@ -158,7 +162,7 @@ function Breadcrumb({ id }) {
 
 /* ---------------- Triage ---------------- */
 
-function Triage({ inc, onRegenerate }) {
+function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
   const [selected, setSelected] = useState(0);
   const ex = inc.explanation || {};
   const sentences = ex.sentences || [];
@@ -229,9 +233,11 @@ function Triage({ inc, onRegenerate }) {
 
         <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
           <MitrePanel inc={inc} />
+          <BehaviorPanel inc={inc} saving={saving} onUse={onUseTechnique} />
           <TrafficSummary edges={inc.edges} />
         </div>
       </div>
+      <WindowGraph inc={inc} />
       <EdgesTable edges={inc.edges} />
     </>
   );
@@ -259,6 +265,53 @@ function MitrePanel({ inc }) {
         </span>
         {inc.technique_override && <span className="small muted">Analyst changed the technique to <span className="mono">{inc.technique_override}</span>.</span>}
         {top && <a href={`https://attack.mitre.org/techniques/${top.technique_id.replace('.', '/')}`} target="_blank" rel="noreferrer">{top.technique_id} on MITRE ATT&amp;CK</a>}
+      </div>
+    </section>
+  );
+}
+
+/** Techniques the traffic pattern itself matches, searched over all of ATT&CK without the model's technique. */
+function BehaviorPanel({ inc, saving, onUse }) {
+  const check = inc.retrieval_trace?.behavior_check;
+  if (!check) return null;            // older backend without the behaviour check
+  if (!check.candidates?.length) {
+    return (
+      <section className="panel" aria-label="Behaviour check">
+        <div className="panel-head"><h2>Behaviour check</h2></div>
+        <p className="panel-body small muted">No distinctive traffic pattern (scan, logins, web requests, large transfer) to compare with the model's technique.</p>
+      </section>
+    );
+  }
+  const current = techniqueOf(inc);
+  const alt = check.candidates[0];
+  return (
+    <section className="panel" aria-label="Behaviour check">
+      <div className="panel-head"><h2>Behaviour check</h2><span className="small muted">Traffic pattern vs all of ATT&amp;CK</span></div>
+      <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {check.agrees_with_detector === false ? (
+          <div className="note note-warn">
+            The traffic looks more like <strong>{alt.technique_id} {alt.name}</strong> than the model's {inc.technique_id}. Verify before acting.
+          </div>
+        ) : (
+          <span className="small" style={{ color: 'var(--ok)' }}>The traffic pattern agrees with the model's technique.</span>
+        )}
+        <ul className="reading small muted">{check.reading.map((r) => <li key={r}>{r}</li>)}</ul>
+        <ol className="check-list">
+          {check.candidates.slice(0, 3).map((c) => (
+            <li key={c.technique_id}>
+              <span><span className="mono muted">{c.technique_id}</span> {c.name}
+                {c.technique_id === inc.technique_id && <span className="tag" style={{ marginLeft: 6 }}>model</span>}</span>
+              {c.technique_id !== current && (
+                <button className="btn btn-sm btn-ghost" disabled={saving} onClick={() => onUse(c.technique_id)}
+                  aria-label={`Use ${c.technique_id} as the technique`}>Use</button>
+              )}
+            </li>
+          ))}
+        </ol>
+        <details className="small muted">
+          <summary>Traffic facts searched</summary>
+          <p className="mono small" style={{ marginTop: 6 }}>{check.facts}</p>
+        </details>
       </div>
     </section>
   );

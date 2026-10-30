@@ -25,14 +25,14 @@ export function dateTime(iso) {
 export function timeSpan(first, last) {
   if (!first) return '—';
   if (!last || first === last) return `${shortDate(first)}, ${hhmm(first)} UTC`;
-  if (shortDate(first) === shortDate(last)) return `${shortDate(first)}, ${hhmm(first)}–${hhmm(last)} UTC`;
+  if (sameDay(first, last)) return `${shortDate(first)}, ${hhmm(first)}–${hhmm(last)} UTC`;
   return `${shortDate(first)} ${hhmm(first)} – ${shortDate(last)} ${hhmm(last)} UTC`;
 }
 
 /** Compact span for table cells: "15:50–16:25" or "May 23 04:40 – May 29 23:10". */
 export function shortSpan(first, last) {
   if (!first) return '—';
-  if (shortDate(first) === shortDate(last || first)) return `${hhmm(first)}–${hhmm(last || first)}`;
+  if (sameDay(first, last || first)) return `${hhmm(first)}–${hhmm(last || first)}`;
   return `${shortDate(first)} ${hhmm(first)} – ${shortDate(last)} ${hhmm(last)}`;
 }
 
@@ -56,4 +56,4 @@ export function service(edge) {
   return [svc, port].filter((x) => x != null && x !== '').join('/');
 }
 
-export const sameDay = (a, b) => !!a && !!b && shortDate(a) === shortDate(b);
+export const sameDay = (a, b) => !!a && !!b && new Date(a).toISOString().slice(0, 10) === new Date(b).toISOString().slice(0, 10);

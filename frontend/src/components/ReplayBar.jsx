@@ -64,6 +64,7 @@ export default function ReplayBar() {
     }
     return out;
   }, [period, pos]);
+  const years = useMemo(() => [...new Set(days.map((d) => d.slice(0, 4)))], [days]);
 
   return (
     <section className="replay" aria-label="Replay">
@@ -91,7 +92,13 @@ export default function ReplayBar() {
               <span className="muted">Jump to</span>
               <select className="ctl" value="" onChange={(e) => e.target.value && replay.jumpTo(e.target.value)}>
                 <option value="">Choose a day</option>
-                {days.map((d) => <option key={d} value={d}>{shortDate(d)}, {hhmm(d)}</option>)}
+                {years.length > 1
+                  ? years.map((y) => (   // the test split spans several years: group by year so the order is clear
+                    <optgroup key={y} label={y}>
+                      {days.filter((d) => d.startsWith(y)).map((d) => <option key={d} value={d}>{shortDate(d)}, {y}, {hhmm(d)}</option>)}
+                    </optgroup>
+                  ))
+                  : days.map((d) => <option key={d} value={d}>{shortDate(d)}, {hhmm(d)}</option>)}
               </select>
             </label>
           )}

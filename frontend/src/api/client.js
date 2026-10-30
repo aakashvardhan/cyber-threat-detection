@@ -1,4 +1,4 @@
-// Thin client for the analyst console API (docs/api/openapi.yaml, v0.4.1).
+// Thin client for the analyst console API (docs/api/openapi.yaml, v0.4.2).
 // Base URL and key come from .env.local (see .env.example).
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -55,6 +55,9 @@ export const api = {
   /** Full incident; the first call starts the explanation (status "generating"). */
   getIncident: (id, { refresh = false } = {}) =>
     request('GET', `/incidents/${encodeURIComponent(id)}${refresh ? '?refresh_explanation=true' : ''}`),
+  /** The 5-minute window graph around the incident's source (default: its latest window). */
+  incidentGraph: (id, windowStart) =>
+    request('GET', `/incidents/${encodeURIComponent(id)}/graph${windowStart ? `?window_start=${encodeURIComponent(windowStart)}` : ''}`),
   /** Status, technique override, note, mitigations applied. */
   updateIncident: (id, update) => request('PATCH', `/incidents/${encodeURIComponent(id)}`, update),
   metrics: () => request('GET', '/metrics'),

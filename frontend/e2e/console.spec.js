@@ -82,6 +82,13 @@ test('5. Incident detail shows explanation, evidence and the evidence funnel', a
   await expect(page.locator('.evidence').first()).toBeVisible();
   await expect(page.locator('.funnel')).toContainText('Search by technique');
   await expect(page.locator('.funnel')).toContainText('MITRE');
+  const detail = await page.request.get(`${API}${new URL(page.url()).pathname}`, { headers: { 'X-API-Key': KEY } });
+  await expect(page.getByRole('heading', { name: /5-minute window/ })).toBeVisible();   // window graph (API 0.4.2)
+  await page.getByRole('tab', { name: 'Network' }).click();
+  await expect(page.getByRole('img', { name: 'Network graph of the window' })).toBeVisible();
+  if ((await detail.json()).retrieval_trace?.behavior_check) {        // backend with the RAG behaviour check (API 0.4.2)
+    await expect(page.getByRole('heading', { name: 'Behaviour check' })).toBeVisible();
+  }
 });
 
 test('6. Confirm attack updates the status and the list counts', async ({ page, request }) => {
@@ -135,7 +142,7 @@ test('9. After a jump, Traffic only shows the 6 hours before the clock', async (
   await jump.selectOption(days[4]);
   await expect(page.locator('.replay-clock')).toContainText(days[4].slice(11, 16));
   // Only the window just jumped to is within 6 hours, so each lane has one bar.
-  await expect(page.locator('.lane .bars').first().locator('span')).toHaveCount(1);
+  await expect(page.locator('.lane .bars').first().locator('.bar')).toHaveCount(1);
 });
 
 test('10. Jump to offers only days with recorded traffic, including the last one', async ({ page, request }) => {

@@ -2,6 +2,17 @@ import { NavLink } from 'react-router-dom';
 import { useReplay } from '../state/ReplayContext.jsx';
 import { BookIcon, ChartIcon, IncidentsIcon, Logo, OverviewIcon, ReportIcon } from './icons.jsx';
 
+function monthYear(iso) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function replayText(r) {
+  if (!r?.window_count) return 'Replaying the test split';
+  const span = r.first_window_start && r.last_window_start
+    ? `, ${monthYear(r.first_window_start)} to ${monthYear(r.last_window_start)}` : '';
+  return `Replaying ${r.window_count.toLocaleString('en-US')} test windows${span}`;
+}
+
 export default function Sidebar() {
   const { data, incidents } = useReplay();
   const awaiting = incidents.filter((i) => i.status === 'new').length;
@@ -21,7 +32,7 @@ export default function Sidebar() {
       <div className="model-box">
         <span>Primary model</span>
         <strong>{data?.primary_model ?? '…'}</strong>
-        <span>Replaying the UWF-ZeekData24 test split</span>
+        <span>{replayText(data?.replay)}</span>
       </div>
     </nav>
   );
