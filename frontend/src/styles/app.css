@@ -156,6 +156,8 @@ a.kpi:hover { background: var(--raised); text-decoration: none; }
 .cell-stack { display: flex; flex-direction: column; min-width: 0; }
 .lane { display: flex; flex-direction: column; gap: 4px; }
 .lane-head { display: flex; justify-content: space-between; }
+.lane-key { display: flex; gap: 14px; flex-wrap: wrap; }
+.lane-key .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
 .bars { display: flex; align-items: flex-end; gap: 1px; border-bottom: 1px solid var(--border); }
 .bars span { flex: 1; border-radius: 1px 1px 0 0; min-height: 1px; }
 .bars .gap { align-self: stretch; min-height: 0; border-radius: 0; background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(154,169,188,.08) 4px 8px); display: flex; align-items: center; justify-content: center; }
@@ -191,6 +193,7 @@ a.kpi:hover { background: var(--raised); text-decoration: none; }
 .sentence:hover { background: var(--raised); }
 .sentence.is-selected { background: var(--raised); border-color: var(--border-hover); }
 .cite { color: var(--accent); font-size: 12px; }
+.from-data { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; }
 .no-cite { font-size: 12px; color: var(--sev-medium); border: 1px dashed rgba(245, 177, 76, 0.6); border-radius: 4px; padding: 0 6px; }
 .generating { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--r-card); color: var(--muted); }
 .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; flex: none; }

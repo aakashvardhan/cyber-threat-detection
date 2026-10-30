@@ -86,8 +86,8 @@ export default function Overview() {
             )}
           </div>
           <div className="kpi">
-            <span className="kpi-label"><span className="dot" style={{ background: 'var(--sev-high)' }} />Flagged as attack</span>
-            <span className="kpi-value">{num(stats.attack)}</span>
+            <span className="kpi-label"><span className="dot" style={{ background: 'var(--sev-medium)' }} />Flagged as attack</span>
+            <span className="kpi-value" style={{ color: 'var(--sev-medium)' }}>{num(stats.attack)}</span>
             <span className="kpi-sub muted">
               {stats.events ? pct(stats.attack / stats.events) : '—'} of edges, in {plural(incidents.length, 'incident')}
               {data?.threshold != null && ` · model threshold ${Number(data.threshold).toFixed(2)}`}
@@ -150,6 +150,13 @@ export default function Overview() {
 }
 
 const SLOT_MS = 5 * 60 * 1000;
+
+/** Flagged bar: red bottom part for high-confidence edges, yellow for the rest (older backends: all yellow). */
+function flaggedFill(w) {
+  if (w.high_confidence_edges == null || !w.attack_edges) return 'var(--sev-medium)';
+  const red = Math.round((w.high_confidence_edges / w.attack_edges) * 100);
+  return `linear-gradient(to top, var(--sev-high) 0 ${red}%, var(--sev-medium) ${red}% 100%)`;
+}
 const SLOTS = RECENT_MS / SLOT_MS;   // 72 five-minute slots in 6 hours
 
 function TrafficPanel({ windows, clock }) {
@@ -191,7 +198,7 @@ function TrafficPanel({ windows, clock }) {
             {run.slots.length >= 8 && height > 60 && <em>no data</em>}
           </span>
         : run.slots.map((x) => (
-          <span key={x.time} className="bar" style={{ flex: 1, height: `${(value(x.w) / max) * 100}%`, background: color, opacity: hover && hover.time !== x.time ? 0.55 : 1 }}
+          <span key={x.time} className="bar" style={{ flex: 1, height: `${(value(x.w) / max) * 100}%`, background: typeof color === 'function' ? color(x.w) : color, opacity: hover && hover.time !== x.time ? 0.55 : 1 }}
             onMouseEnter={() => setHover(x)} onMouseLeave={() => setHover(null)} />
         ))))}
     </div>
@@ -210,19 +217,26 @@ function TrafficPanel({ windows, clock }) {
                 : <p className="small muted" style={{ margin: 0, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>No normal traffic in these windows: every edge was flagged.</p>}
             </div>
             <div className="lane">
-              <span className="lane-head small"><span style={{ color: 'var(--sev-high)' }}>Flagged as attack</span><span className="mono small muted">peak {num(t.maxA)} edges per window</span></span>
-              {lane((w) => w.attack_edges, t.maxA, 'var(--sev-high)', 84)}
+              <span className="lane-head small">
+                <span className="lane-key">
+                  <span style={{ color: 'var(--sev-medium)' }}><i className="key" style={{ background: 'var(--sev-medium)' }} />Flagged as attack</span>
+                  <span style={{ color: 'var(--sev-high)' }}><i className="key" style={{ background: 'var(--sev-high)' }} />of which p ≥ {URGENT_PROBABILITY.toFixed(2)}</span>
+                </span>
+                <span className="mono small muted">peak {num(t.maxA)} edges per window</span>
+              </span>
+              {lane((w) => w.attack_edges, t.maxA, flaggedFill, 84)}
             </div>
             <div className="mono small muted" style={{ display: 'flex', justifyContent: 'space-between' }}>
               {[0, 24, 48, SLOTS - 1].map((i) => <span key={i}>{label(t.slots[i].time)}</span>)}
             </div>
             <div className="traffic-readout small" aria-live="polite">
               {hover
-                ? <><span className="mono">{dateTime(new Date(hover.time).toISOString())}</span> · Normal <strong>{num(hover.w.events - hover.w.attack_edges)}</strong> · Flagged <strong style={{ color: 'var(--sev-high)' }}>{num(hover.w.attack_edges)}</strong> edges</>
+                ? <><span className="mono">{dateTime(new Date(hover.time).toISOString())}</span> · Normal <strong>{num(hover.w.events - hover.w.attack_edges)}</strong> · Flagged <strong style={{ color: 'var(--sev-medium)' }}>{num(hover.w.attack_edges)}</strong> edges{hover.w.high_confidence_edges != null && hover.w.attack_edges > 0 && <>, <strong style={{ color: 'var(--sev-high)' }}>{num(hover.w.high_confidence_edges)}</strong> with p ≥ {URGENT_PROBABILITY.toFixed(2)}</>}</>
                 : <span className="muted">Hover a bar to see that window.</span>}
             </div>
             <p className="small muted">
               Each row has its own scale, because normal traffic is much larger than flagged traffic.
+              The red part of a flagged bar is the edges the model is at least {Math.round(URGENT_PROBABILITY * 100)}% sure of, the same level as High-confidence incidents.
               {t.missing > 0 && ' Shaded gaps are 5-minute windows with no recorded traffic in the test split, or not replayed yet.'}
             </p>
           </>

@@ -5,7 +5,10 @@ import { expect, test } from '@playwright/test';
 
 const API = process.env.E2E_API_URL;
 const KEY = process.env.E2E_API_KEY;
-const WARMUP_WINDOWS = 150; // enough replayed traffic to have incidents to work with
+const MIN_WARMUP = 150;      // replay at least this many windows first
+const MIN_NEW_INCIDENTS = 5; // ...and keep going until there are incidents to work with (tests 4-8)
+const MAX_WARMUP = 1500;     // Sai's test split has no attacks in its first ~550 windows
+let warmed = 0;              // windows replayed by beforeAll
 
 async function api(request, method, path, data) {
   const res = await request.fetch(API + path, { method, data, headers: { 'X-API-Key': KEY } });
@@ -26,7 +29,13 @@ test.beforeAll(async ({ request }) => {
   const health = await request.get(`${API}/health`);
   expect(health.ok(), `Backend not reachable at ${API}. Start it first (backend/README.md).`).toBeTruthy();
   await api(request, 'POST', '/detect', { reset: true });
-  for (let i = 1; i < WARMUP_WINDOWS; i++) await api(request, 'POST', '/detect', {});
+  warmed = 1;
+  const enough = async () => (await api(request, 'GET', '/incidents')).incidents.filter((i) => i.status === 'new').length >= MIN_NEW_INCIDENTS;
+  while (warmed < MAX_WARMUP && (warmed < MIN_WARMUP || (warmed % 25 !== 0 || !(await enough())))) {
+    await api(request, 'POST', '/detect', {});
+    warmed += 1;
+  }
+  expect(await enough(), `no incidents after ${warmed} windows`).toBeTruthy();
 });
 
 test('1. Overview loads data from the backend', async ({ page }) => {
@@ -35,7 +44,7 @@ test('1. Overview loads data from the backend', async ({ page }) => {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  await expect(page.locator('.replay-clock')).toContainText(`Window ${WARMUP_WINDOWS} of`);
+  await expect(page.locator('.replay-clock')).toContainText(`Window ${warmed.toLocaleString('en-US')} of`);
   await expect(page.locator('.model-box strong')).not.toHaveText('…');
   await expect(page.locator('.kpi-value').first()).not.toHaveText('0');
   expect(errors).toEqual([]);
@@ -134,15 +143,21 @@ test('8. A closed incident can be reopened and the status corrected', async ({ p
   await expect(page.locator('.stepper .is-current')).toHaveText('Confirmed');
 });
 
-test('9. After a jump, Traffic only shows the 6 hours before the clock', async ({ page }) => {
+test('9. After a jump, Traffic only shows the 6 hours before the clock', async ({ page, request }) => {
+  const { replay } = await api(request, 'GET', '/incidents');
+  // the first recorded day after the replay clock (the replay only moves forward)
+  const day = replay.day_starts.find((d) => new Date(d) > new Date(new Date(replay.window_start).getTime() + 6 * 3600e3));
   await page.goto('/');
   const jump = page.locator('.replay-right select');
-  await expect(jump.locator('option').nth(5)).toBeAttached();
-  const days = await jump.locator('option').evaluateAll((o) => o.map((x) => x.value).filter(Boolean));
-  await jump.selectOption(days[4]);
-  await expect(page.locator('.replay-clock')).toContainText(days[4].slice(11, 16));
+  await expect(jump.locator(`option[value="${day}"]`)).toBeAttached();
+  await jump.selectOption(day);
+  await expect(page.locator('.replay-clock')).toContainText(day.slice(11, 16));
   // Only the window just jumped to is within 6 hours, so each lane has one bar.
   await expect(page.locator('.lane .bars').first().locator('.bar')).toHaveCount(1);
+  // flagged bars split into high-confidence (red) and the rest (yellow) (API 0.4.3)
+  if (replay.day_starts && (await api(request, 'GET', '/incidents')).windows.some((w) => 'high_confidence_edges' in w)) {
+    await expect(page.locator('.lane-key')).toContainText('of which p ≥ 0.80');
+  }
 });
 
 test('10. Jump to offers only days with recorded traffic, including the last one', async ({ page, request }) => {

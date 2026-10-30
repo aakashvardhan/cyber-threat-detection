@@ -12,6 +12,25 @@ const PORT_NAMES = { 21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS', 
   5432: 'Postgres', 5900: 'VNC', 8080: 'HTTP proxy' };
 const MAX_GRID = 40;
 const MAX_RING = 48;
+const MAX_GROUPS = 12;
+
+/* Hosts elsewhere in the window, split into groups of linked hosts: each group's busiest host is the
+   hub, the rest are drawn around it. Busiest groups first. */
+function otherGroups(ips, edges) {
+  const set = new Set(ips), nb = Object.fromEntries(ips.map((ip) => [ip, new Set()]));
+  for (const e of edges) {
+    if (set.has(e.source_ip) && set.has(e.destination_ip)) { nb[e.source_ip].add(e.destination_ip); nb[e.destination_ip].add(e.source_ip); }
+  }
+  const seen = new Set(), groups = [];
+  for (const ip of ips) {
+    if (seen.has(ip)) continue;
+    const members = [], stack = [ip];
+    while (stack.length) { const x = stack.pop(); if (seen.has(x)) continue; seen.add(x); members.push(x); stack.push(...nb[x]); }
+    const hub = members.reduce((a, b) => (nb[b].size > nb[a].size ? b : a));
+    groups.push({ hub, leaves: members.filter((x) => x !== hub).sort((a, b) => ipKey(a).localeCompare(ipKey(b))) });
+  }
+  return groups.sort((a, b) => b.leaves.length - a.leaves.length);
+}
 const COLORS = { attack: '#FF4040', normal: '#5F7A96', refused: '#F5B14C', muted: '#9AA9BC', text: '#E6EDF3', bg: '#0E1621', panel: '#1B2838', border: '#2A3B50' };
 const MONO = 'ui-monospace, Menlo, Consolas, monospace';
 
@@ -208,8 +227,9 @@ function NetworkView({ g, scope, setScope }) {
   const edges = scope === 'two_hop' ? g.edges.filter((e) => e.in_two_hop) : g.edges;
   const ips = new Set(edges.flatMap((e) => [e.source_ip, e.destination_ip]));
   const nodes = g.nodes.filter((n) => ips.has(n.ip));
-  const W = 900, H = 640, cx = 450, cy = 330;
-  const pos = {};
+  const H = 640, cx = 450, cy = 330;
+  let W = 900;
+  const pos = {}, centre = {}, labelAt = {};   // centre: the point a node's label points away from
   pos[g.source_ip] = [cx, cy];
   const ring = (list, r, offset = 0) => list.forEach((ip, i) => {
     const a = -Math.PI / 2 + offset + (2 * Math.PI * i) / Math.max(list.length, 1);
@@ -225,13 +245,24 @@ function NetworkView({ g, scope, setScope }) {
     const a = Math.atan2(ny - cy, nx - cx) + (i % 2 ? 0.12 : -0.12);
     pos[ip] = [cx + 262 * Math.cos(a), cy + 262 * Math.sin(a)];
   });
-  // hosts not connected to this source: keep each connected pair next to each other on the outer ring,
-  // so their links are short arcs at the edge instead of lines crossing the source's star
-  const otherSet = new Set(other), ordered = [];
-  for (const e of edges) {
-    for (const ip of [e.source_ip, e.destination_ip]) if (otherSet.has(ip) && !ordered.includes(ip)) ordered.push(ip);
+  // hosts not connected to this source: draw each group of linked hosts as its own small cluster in a
+  // column beside the source's star, so their links never cross it
+  const groups = otherGroups(other, edges);
+  if (groups.length) {
+    const CELL = 230, rows = Math.max(1, Math.floor(H / CELL)), cols = Math.ceil(Math.min(groups.length, MAX_GROUPS) / rows);
+    W = 900 + cols * CELL + 30;
+    groups.slice(0, MAX_GROUPS).forEach(({ hub, leaves }, k) => {
+      const gx = 900 + CELL * Math.floor(k / rows) + CELL / 2;
+      const gy = (H - Math.min(groups.length, rows) * CELL) / 2 + CELL * (k % rows) + CELL / 2;
+      const shown = leaves.slice(0, 12), r = shown.length > 6 ? 72 : 60;
+      pos[hub] = [gx, gy];
+      labelAt[hub] = [gx, gy - r - 24, 'middle'];
+      shown.forEach((ip, i) => {
+        const a = -Math.PI / 2 + (Math.PI * (2 * i + 1)) / shown.length;   // leave the top free for the hub's label
+        pos[ip] = [gx + r * Math.cos(a), gy + r * Math.sin(a)]; centre[ip] = [gx, gy];
+      });
+    });
   }
-  ring(ordered.slice(0, MAX_RING), 300, Math.PI / Math.max(ordered.length, 1));
   const outcomeOf = Object.fromEntries(g.edges.filter((e) => e.source_ip === g.source_ip).map((e) => [e.destination_ip, e.outcome]));
   const visible = edges.filter((e) => pos[e.source_ip] && pos[e.destination_ip]);
   const hidden = nodes.length - Object.keys(pos).length;
@@ -267,7 +298,8 @@ function NetworkView({ g, scope, setScope }) {
             const [x, y] = pos[n.ip];
             if (n.role === 'source') return null;
             const out = outcomeOf[n.ip];
-            const a = Math.atan2(y - cy, x - cx);
+            const [ox, oy] = centre[n.ip] || [cx, cy];
+            const a = Math.atan2(y - oy, x - ox);
             const anchor = Math.cos(a) > 0.3 ? 'start' : Math.cos(a) < -0.3 ? 'end' : 'middle';
             return (
               <g key={n.ip}>
@@ -277,12 +309,20 @@ function NetworkView({ g, scope, setScope }) {
                     : out === 'completed' ? <circle cx={x} cy={y} r={8} fill={COLORS.attack} />
                     : <circle cx={x} cy={y} r={7} fill={COLORS.bg} stroke={COLORS.muted} strokeWidth={2} strokeDasharray="3 2" />)
                   : <circle cx={x} cy={y} r={n.role === 'second_hop' ? 8 : 6} fill={COLORS.normal} fillOpacity={n.role === 'other' ? 0.6 : 1} />}
-                <text x={x + 20 * Math.cos(a)} y={y + 20 * Math.sin(a) + 4} textAnchor={anchor} fill={n.role === 'second_hop' ? COLORS.text : COLORS.muted} fontSize={11} fontFamily={MONO}>
-                  {n.role === 'target' ? lastOctets(n.ip) : n.ip}
+                <text x={labelAt[n.ip]?.[0] ?? x + 20 * Math.cos(a)} y={labelAt[n.ip]?.[1] ?? y + 20 * Math.sin(a) + 4}
+                  textAnchor={labelAt[n.ip]?.[2] ?? anchor} fill={n.role === 'second_hop' ? COLORS.text : COLORS.muted} fontSize={11} fontFamily={MONO}>
+                  {n.role === 'target' ? lastOctets(n.ip) : centre[n.ip] ? lastOctets(n.ip, 2) : n.ip}
                 </text>
               </g>
             );
           })}
+          {W > 900 && (
+            <g>
+              <line x1={905} y1={40} x2={905} y2={H - 40} stroke={COLORS.border} strokeDasharray="4 4" />
+              <text x={920} y={24} fill={COLORS.muted} fontSize={13}>Elsewhere in this window</text>
+              <text x={920} y={42} fill={COLORS.muted} fontSize={11}>not connected to this source</text>
+            </g>
+          )}
           <circle cx={cx} cy={cy} r={16} fill={COLORS.attack} />
           <rect x={cx - 64} y={cy + 22} width={128} height={22} rx={4} fill={COLORS.bg} stroke={COLORS.attack} />
           <text x={cx} y={cy + 38} textAnchor="middle" fill={COLORS.text} fontSize={13} fontFamily={MONO}>{g.source_ip}</text>

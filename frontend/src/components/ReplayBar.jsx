@@ -38,6 +38,7 @@ export default function ReplayBar() {
     if (!period) return null;
     const normal = new Array(BINS).fill(0);
     const attack = new Array(BINS).fill(0);
+    const high = new Array(BINS).fill(0);
     const done = new Array(BINS).fill(false);
     const span = period.end - period.start;
     for (const w of data.windows) {
@@ -45,12 +46,13 @@ export default function ReplayBar() {
       const bin = Math.min(BINS - 1, Math.max(0, Math.floor((t * BINS) / span)));
       normal[bin] += w.events - w.attack_edges;
       attack[bin] += w.attack_edges;
+      high[bin] += w.high_confidence_edges ?? 0;
       done[bin] = true;
     }
     const maxN = Math.max(1, ...normal);
     const maxA = Math.max(1, ...attack);
     const head = pos?.window_start ? ((new Date(pos.window_start).getTime() + WINDOW_MS / 2 - period.start) / span) * 100 : 0;
-    return { normal, attack, done, maxN, maxA, head };
+    return { normal, attack, high, done, maxN, maxA, head };
   }, [data, period, pos]);
 
   const days = useMemo(() => {
@@ -109,7 +111,7 @@ export default function ReplayBar() {
       {rails && (
         <>
           <div className="rails">
-            <div className="rail-labels small"><span className="muted">All traffic</span><span style={{ color: 'var(--sev-high)' }}>Flagged as attack</span></div>
+            <div className="rail-labels small"><span className="muted">All traffic</span><span style={{ color: 'var(--sev-medium)' }}>Flagged as attack</span></div>
             <div className="rail-area" role="img" aria-label={`Traffic per period across the test split. The replay is ${Math.round(rails.head)}% through.`}>
               <div className="rail" style={{ height: 14 }}>
                 {rails.normal.map((v, i) => (
@@ -118,7 +120,7 @@ export default function ReplayBar() {
               </div>
               <div className="rail" style={{ height: 22 }}>
                 {rails.attack.map((v, i) => (
-                  <span key={i} style={{ height: rails.done[i] ? `${2 + (v / rails.maxA) * 20}px` : '2px', background: rails.done[i] ? 'var(--sev-high)' : 'rgba(255,64,64,.22)' }} />
+                  <span key={i} style={{ height: rails.done[i] ? `${2 + (v / rails.maxA) * 20}px` : '2px', background: !rails.done[i] ? 'rgba(245,177,76,.22)' : v && rails.high[i] ? `linear-gradient(to top, var(--sev-high) 0 ${Math.round((rails.high[i] / v) * 100)}%, var(--sev-medium) ${Math.round((rails.high[i] / v) * 100)}% 100%)` : 'var(--sev-medium)' }} />
                 ))}
               </div>
               <span className="rail-head" style={{ left: `${rails.head}%` }} />

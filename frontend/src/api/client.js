@@ -1,4 +1,4 @@
-// Thin client for the analyst console API (docs/api/openapi.yaml, v0.4.2).
+// Thin client for the analyst console API (docs/api/openapi.yaml, v0.4.3).
 // Base URL and key come from .env.local (see .env.example).
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');

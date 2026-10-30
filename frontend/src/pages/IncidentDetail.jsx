@@ -198,7 +198,9 @@ function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
                     {s.text}{' '}
                     {s.citations?.length
                       ? <span className="mono cite">{s.citations.map((c) => `[${evidenceNo[c] ?? c}]`).join(' ')}</span>
-                      : <span className="no-cite">No evidence cited</span>}
+                      : i === 0 && ex.mode === 'llm'
+                        ? <span className="from-data">From the incident data</span>
+                        : <span className="no-cite">No evidence cited</span>}
                   </button>
                 ))}
                 {ex.status === 'ready' && (
@@ -214,7 +216,10 @@ function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
                     <div className="evidence-meta small">
                       <span className="mono" style={{ color: 'var(--accent)' }}>[{evidenceNo[e.evidence_id]}]</span>
                       <span className="tag">{SOURCE_LABEL[e.source] || e.source}</span>
-                      <span className={`tag ${e.level === 'tactic' ? 'warn-text' : ''}`}>{e.level === 'tactic' ? 'Tactic fallback' : e.level === 'procedure' ? 'Procedure' : 'Technique'}</span>
+                      {(() => {
+                        const level = e.level === 'tactic' ? 'Tactic fallback' : e.level === 'procedure' ? 'Procedure' : 'Technique';
+                        return level !== (SOURCE_LABEL[e.source] || e.source) && <span className={`tag ${e.level === 'tactic' ? 'warn-text' : ''}`}>{level}</span>;
+                      })()}
                       <span className="mono muted" style={{ marginLeft: 'auto' }}>{e.score != null ? e.score.toFixed(2) : ''}</span>
                     </div>
                     <strong>{e.url ? <a href={e.url} target="_blank" rel="noreferrer">{e.title}</a> : e.title}</strong>
