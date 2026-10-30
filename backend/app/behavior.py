@@ -158,7 +158,7 @@ def interpret(f: dict) -> list[str]:
         out.append("many DNS queries; DNS lookups")
     if f["orig_bytes"] > 1_000_000 and f["orig_bytes"] > 5 * max(f["resp_bytes"], 1):
         out.append("large outbound data transfer from the host; data exfiltration")
-    return out or ["network connections between hosts"]
+    return out
 
 
 def _services(f: dict) -> list[str]:
@@ -266,6 +266,8 @@ class BehaviorSearch:
         if not self.enabled:
             return None
         reading = interpret(f)
+        if not reading:     # nothing distinctive (few connections, no scan / login / web / transfer pattern)
+            return {"facts": facts(f), "reading": [], "method": "none", "candidates": [], "agrees_with_detector": None}
         lexical = [t for t, _ in self.index.rank(". ".join(reading) + ". Services: " + ", ".join(_services(f)), 10)
                    if t not in HOST_ONLY]
         method = "bm25"

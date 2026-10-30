@@ -101,6 +101,7 @@ class WindowResult:
     attack_edges: int
     new_incident_ids: list[str]
     updated_incident_ids: list[str]
+    probabilities: np.ndarray | None = None      # per edge, in data.rows(window) order (for the graph view)
 
 
 class ReplayState:
@@ -170,7 +171,8 @@ class ReplayState:
                 new_ids.append(incident.incident_id)
 
         attack_edges = int((np.asarray(prediction.attack_probability) >= threshold).sum())
-        result = WindowResult(window, len(rows), attack_edges, new_ids, updated_ids)
+        result = WindowResult(window, len(rows), attack_edges, new_ids, updated_ids,
+                              np.asarray(prediction.attack_probability, dtype=float))
         self.results[window] = result
         self.order.append(window)
         return result

@@ -229,3 +229,39 @@ class IncidentUpdate(_Model):
     technique_override: str | None = None
     note: str | None = None
     mitigations_applied: list[str] | None = None
+
+
+class GraphNode(_Model):
+    ip: str
+    role: Literal["source", "target", "second_hop", "other"]
+    internal: bool
+
+
+class GraphEdge(_Model):
+    NULLABLE = frozenset({"attack_probability", "service", "port", "connection_state"})
+    source_ip: str
+    destination_ip: str
+    attack_probability: float | None = None
+    flagged: bool
+    connection_count: int
+    service: str | None = None
+    port: int | None = None
+    connection_state: str | None = None
+    outcome: Literal["no_reply", "refused", "completed", "unknown"]
+    orig_bytes: float
+    resp_bytes: float
+    orig_packets: int
+    resp_packets: int
+    in_two_hop: bool
+
+
+class WindowGraph(_Model):
+    incident_id: str
+    window_start: str
+    windows: list[str]
+    threshold: float
+    source_ip: str
+    window_edge_count: int
+    truncated: bool
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]

@@ -18,6 +18,7 @@ from app.config import DEMO_DATA, Settings
 from app.detectors import Detector, load_detector
 from app.behavior import BehaviorSearch
 from app.explain import ExplanationManager
+from app.graph import window_graph
 from app.incidents import Incident, ReplayController, ReplayError
 from app.knowledge import KnowledgeBase
 from app.replay_data import ReplayData
@@ -225,6 +226,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def get_incident(incident_id: str, refresh_explanation: bool = Query(default=False),
                      state: AppState = Depends(get_state)):
         return incident_detail(state, find(state, incident_id), refresh_explanation)
+
+    @app.get("/incidents/{incident_id}/graph", response_model=schemas.WindowGraph, tags=["Incidents"],
+             dependencies=[Depends(require_key)],
+             responses={400: {"model": schemas.Error}, 401: {"model": schemas.Error}, 404: {"model": schemas.Error}})
+    def get_incident_graph(incident_id: str, window_start: str | None = Query(default=None),
+                           state: AppState = Depends(get_state)):
+        """The 5-minute window graph around the incident's source (default: its latest window)."""
+        incident = find(state, incident_id)
+        windows = {e.window_start for e in incident.edges}
+        window = state.replay_data.resolve(window_start) if window_start else incident.last_window
+        if window is None or window not in windows:
+            raise HTTPException(status_code=400, detail=f"{window_start} is not a window of {incident_id}")
+        return window_graph(state.controller.state, incident, window, state.detector.threshold)
 
     @app.patch("/incidents/{incident_id}", response_model=schemas.IncidentSummary, tags=["Incidents"],
                dependencies=[Depends(require_key)],

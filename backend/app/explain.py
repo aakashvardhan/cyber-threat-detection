@@ -57,16 +57,17 @@ class Redactor:
             label = chr(65 + r) + label
         return label
 
-    def _swap(self, text: str, mapping: dict[str, str]) -> str:
+    def _swap(self, text: str, mapping: dict[str, str], flags: int = 0) -> str:
         for old in sorted(mapping, key=len, reverse=True):
-            text = re.sub(rf"(?<![\w.]){re.escape(old)}(?![\w.])", mapping[old], text)
+            text = re.sub(rf"(?<![\w.]){re.escape(old)}(?!\w|\.\d)", lambda _m, new=mapping[old]: new, text, flags=flags)
         return text
 
     def hide(self, text: str) -> str:
         return self._swap(text, self.forward) if self.enabled else text
 
     def reveal(self, text: str) -> str:
-        return self._swap(text, self.backward) if self.enabled else text
+        # the LLM capitalises aliases at the start of a sentence ("Host-A scanned ...")
+        return self._swap(text, self.backward, re.IGNORECASE) if self.enabled else text
 
 
 def _ip_key(ip: str):

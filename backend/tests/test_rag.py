@@ -218,3 +218,31 @@ def test_groq_request_uses_json_mode(make_settings, monkeypatch):
     explain.LLMClient(settings).chat("hi")
     assert sent[0]["response_format"] == {"type": "json_object"} and sent[0]["reasoning_effort"] == "low"
     assert sent[0]["max_tokens"] == 2000
+
+
+def test_no_distinctive_pattern_gives_no_candidates(stix):
+    check = BehaviorSearch.load(stix).check(incident_features(rows(1, 2, 53, "dns", "SF", windows=1)), "T1046")
+    assert check["reading"] == [] and check["candidates"] == [] and check["agrees_with_detector"] is None
+
+
+def test_redactor_reveals_capitalised_aliases():
+    from app.explain import Redactor
+    r = Redactor(["143.88.4.11", "143.88.5.1"], enabled=True)
+    assert r.reveal("Host-A scanned host-B. HOST-A again.") == "143.88.4.11 scanned 143.88.5.1. 143.88.4.11 again."
+    assert r.hide("Traffic to 143.88.5.1. Not 143.88.5.10 or 143.88.4.110.") == "Traffic to host-B. Not 143.88.5.10 or 143.88.4.110."
+
+
+# ---------------------------------------------------------------- window graph
+def test_window_graph_around_the_incident_source(client):
+    client.post("/detect", json={"window_start": iso(2)})
+    incident_id = client.get("/incidents").json()["incidents"][0]["incident_id"]
+    g = client.get(f"/incidents/{incident_id}/graph").json()
+    assert g["window_start"] == iso(2) and g["windows"] == [iso(2)] and g["source_ip"] == "143.88.6.11"
+    roles = {n["ip"]: n["role"] for n in g["nodes"]}
+    assert roles["143.88.6.11"] == "source" and sum(r == "target" for r in roles.values()) == 6
+    attack = [e for e in g["edges"] if e["source_ip"] == "143.88.6.11"]
+    assert len(attack) == 6 and all(e["flagged"] and e["outcome"] == "refused" and e["in_two_hop"] for e in attack)
+    assert all(not e["in_two_hop"] for e in g["edges"] if e["source_ip"] != "143.88.6.11")   # normal DNS traffic
+    assert g["window_edge_count"] == 10 and not g["truncated"]
+    assert client.get(f"/incidents/{incident_id}/graph", params={"window_start": iso(5)}).status_code == 400
+    assert client.get("/incidents/INC-9999/graph").status_code == 404
