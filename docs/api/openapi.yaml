@@ -330,6 +330,46 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationFailed'
 
+  /incidents/{incident_id}/graph:
+    parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema: { type: string, example: INC-0040 }
+    get:
+      tags: [Incidents]
+      operationId: getIncidentGraph
+      summary: The 5-minute window graph around the incident's source
+      description: |
+        Nodes are IPs and edges are the window's aggregated connections, each with the detector's attack
+        probability. `in_two_hop` marks the edges a 2-layer GraphSAGE uses for the source's edges (every edge
+        touching the source or one of its targets). Windows with more than 400 edges keep the two-hop part
+        and the most suspicious of the rest (`truncated: true`).
+      parameters:
+        - name: window_start
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: One of the incident's windows (`windows` in the response); default the latest
+      responses:
+        '200':
+          description: Window graph
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WindowGraph' }
+        '400':
+          description: The window is not one of the incident's windows
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such incident
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /metrics:
     get:
       tags: [Research]
@@ -628,6 +668,48 @@ components:
         fallback_to_tactic: { type: boolean }
         latency_ms: { type: integer }
         behavior_check: { $ref: '#/components/schemas/BehaviorCheck' }
+
+    WindowGraph:
+      type: object
+      required: [incident_id, window_start, windows, threshold, source_ip, window_edge_count, truncated, nodes, edges]
+      properties:
+        incident_id: { type: string }
+        window_start: { type: string, format: date-time }
+        windows: { type: array, items: { type: string, format: date-time }, description: All windows of the incident }
+        threshold: { type: number, description: Detector threshold; edges at or above it are flagged }
+        source_ip: { type: string }
+        window_edge_count: { type: integer, description: Edges in the whole window before truncation }
+        truncated: { type: boolean }
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [ip, role, internal]
+            properties:
+              ip: { type: string }
+              role: { type: string, enum: [source, target, second_hop, other] }
+              internal: { type: boolean }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [source_ip, destination_ip, attack_probability, flagged, connection_count, service, port,
+                       connection_state, outcome, orig_bytes, resp_bytes, orig_packets, resp_packets, in_two_hop]
+            properties:
+              source_ip: { type: string }
+              destination_ip: { type: string }
+              attack_probability: { type: number, nullable: true }
+              flagged: { type: boolean }
+              connection_count: { type: integer }
+              service: { type: string, nullable: true }
+              port: { type: integer, nullable: true }
+              connection_state: { type: string, nullable: true, example: S0 }
+              outcome: { type: string, enum: [no_reply, refused, completed, unknown], description: "From the Zeek connection state: S0/SH/OTH = no_reply, REJ/RST* = refused, SF/S1-S3 = completed" }
+              orig_bytes: { type: number }
+              resp_bytes: { type: number }
+              orig_packets: { type: integer }
+              resp_packets: { type: integer }
+              in_two_hop: { type: boolean }
 
     BehaviorCheck:
       type: object
