@@ -1,0 +1,42 @@
+/* Design tokens: scheme A, Midnight Ops (UI design v1.1).
+   Every color in the app comes from here. */
+:root {
+  color-scheme: dark;
+  /* Surfaces */
+  --bg: #0E1621;
+  --nav: #0B121B;
+  --surface: #16212E;
+  --raised: #1B2838;
+  --border: #2A3B50;
+  --border-soft: #22314A;
+  --border-hover: #3E5574;
+
+  /* Text */
+  --text: #E6EDF3;
+  --muted: #9AA9BC;
+
+  /* Accent: actions, links, focus, scores. Never used for traffic. */
+  --accent: #4CB3E6;
+  --accent-hover: #7CCBF0;
+  --on-accent: #0A1219;
+
+  /* Severity */
+  --sev-high: #FF4040;
+  --sev-medium: #F5B14C;
+  --sev-low: #8FB8DE;
+
+  /* Traffic and outcomes */
+  --normal: #5F7A96;
+  --normal-dim: #243246;
+  --ok: #4CC38A;
+
+  /* Type */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Space and shape */
+  --gutter: 32px;
+  --r-control: 6px;
+  --r-card: 8px;
+  --r-panel: 10px;
+}
