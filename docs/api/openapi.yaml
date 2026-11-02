@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.4.4
+  version: 0.5.0
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
@@ -10,8 +10,9 @@ info:
     - Evaluation and knowledge-base numbers are computed offline (`GET /metrics`).
     - Filtering, sorting, charts and reports run in the browser, so no other endpoints are needed.
 
-    Only the primary model runs live. Outputs of Models 1-5 for the Research tab are precomputed
-    for the test split and returned inside `GET /incidents/{id}`.
+    One graph model runs live (GraphSAGE by default; `POST /models/active` switches to HGT and restarts
+    the replay). Outputs of every model for the Research tab are precomputed for the test split and
+    returned inside `GET /incidents/{id}`; the 7B LLMs only run offline.
 
     **Access.** Every request sends a shared demo key in the `X-API-Key` header. This keeps strangers
     from resetting the replay, editing incidents or starting LLM jobs on the deployed demo. It is not
@@ -35,8 +36,10 @@ tags:
     description: Live detection over the replayed test traffic
   - name: Incidents
     description: Incident list and incident detail
+  - name: Models
+    description: Which graph model runs live
   - name: Research
-    description: Offline evaluation and knowledge-base statistics
+    description: Offline evaluation and the knowledge base the RAG pipeline cites
 
 paths:
   /detect:
@@ -419,6 +422,100 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Metrics'
+
+  /models:
+    get:
+      tags: [Models]
+      operationId: listModels
+      summary: Live (graph) and offline (LLM) models, and which one is running
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+
+  /models/active:
+    post:
+      tags: [Models]
+      operationId: setActiveModel
+      summary: Switch the live model (graphsage or hgt); the replay restarts from the first window
+      description: |
+        Every incident comes from the live model, so switching clears incidents and restarts the replay.
+        Offline models (the LLMs) cannot run live (400). A graph model whose checkpoint is missing
+        returns 409 and the current model keeps running.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelSwitch'
+      responses:
+        '400':
+          description: Not a live model
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: The model's checkpoint could not be loaded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '200':
+          description: Models after the switch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+
+  /knowledge-base:
+    get:
+      tags: [Research]
+      operationId: getKnowledgeBase
+      summary: Every ATT&CK technique with the procedure / CTI / CVE chunks the RAG pipeline can cite
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '200':
+          description: Knowledge-base catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeCatalog'
+
+  /knowledge-base/{technique_id}:
+    get:
+      tags: [Research]
+      operationId: getKnowledgeTechnique
+      summary: One technique with its description, mitigations and linked chunks
+      parameters:
+        - name: technique_id
+          in: path
+          required: true
+          schema: { type: string, example: T1110 }
+        - name: limit
+          in: query
+          description: Chunks returned per source
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Unknown technique
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '200':
+          description: Technique page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeTechnique'
 
 components:
   securitySchemes:
@@ -969,13 +1066,126 @@ components:
 
     AblationRow:
       type: object
-      required: [variant]
+      description: One RAG ablation study; `rows` (per-model scores) or `auroc` depending on the study.
+      required: [id, question, finding]
       properties:
-        variant: { type: string, example: gnn_only }
-        macro_f1: { type: number, nullable: true }
-        top3_accuracy: { type: number, nullable: true }
-        groundedness: { type: number, nullable: true }
-        citation_correctness: { type: number, nullable: true }
+        id: { type: string, example: behaviour_check_as_corrector }
+        question: { type: string }
+        setup: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              model: { type: string }
+              base: { type: object, additionalProperties: { type: number } }
+              replace: { type: object, additionalProperties: { type: number } }
+              add: { type: object, additionalProperties: { type: number } }
+              changed: { type: integer }
+              fixed: { type: integer }
+              broken: { type: integer }
+        auroc: { type: object, additionalProperties: { type: number } }
+        within_technique:
+          type: object
+          additionalProperties: { type: object, additionalProperties: { type: number } }
+        finding: { type: string }
+
+    ModelInfo:
+      type: object
+      required: [id, name, live, available, active]
+      properties:
+        id: { type: string, example: hgt }
+        name: { type: string, example: HGT }
+        live: { type: boolean, description: Can run as the live detector }
+        available: { type: boolean, description: Its checkpoint is installed }
+        active: { type: boolean }
+        note: { type: string, description: Why it is not available, or how it was scored }
+
+    ModelList:
+      type: object
+      required: [active, models]
+      properties:
+        active: { type: string, example: graphsage }
+        models:
+          type: array
+          items: { $ref: '#/components/schemas/ModelInfo' }
+
+    ModelSwitch:
+      type: object
+      required: [model]
+      properties:
+        model: { type: string, enum: [graphsage, hgt] }
+
+    KnowledgeEntry:
+      type: object
+      required: [technique_id, name, tactics, procedure, cti, cve, mitigations, subtechniques, detector_class]
+      properties:
+        technique_id: { type: string, example: T1110 }
+        name: { type: string }
+        tactics: { type: array, items: { type: string } }
+        procedure: { type: integer }
+        cti: { type: integer }
+        cve: { type: integer }
+        mitigations: { type: integer }
+        subtechniques: { type: integer }
+        detector_class: { type: boolean, description: The live model can predict this technique }
+
+    KnowledgeCatalog:
+      type: object
+      required: [retrieval, sources, techniques]
+      properties:
+        retrieval: { type: string, example: vector (sentence-transformers/all-MiniLM-L6-v2) }
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              source: { type: string, enum: [mitre, procedure, cti, cve] }
+              items: { type: integer }
+              chunks: { type: integer }
+              techniques_linked: { type: integer }
+        techniques:
+          type: array
+          items: { $ref: '#/components/schemas/KnowledgeEntry' }
+
+    KnowledgeItem:
+      type: object
+      required: [source, id, ref, title, text, url]
+      properties:
+        source: { type: string, enum: [procedure, cti, cve] }
+        id: { type: string }
+        ref: { type: string, example: G0007 }
+        title: { type: string }
+        text: { type: string }
+        url: { type: string, nullable: true }
+
+    KnowledgeTechnique:
+      type: object
+      required: [technique_id, name, tactics, platforms, description, url, mitigations, subtechniques, counts, items]
+      properties:
+        technique_id: { type: string }
+        name: { type: string }
+        tactics: { type: array, items: { type: string } }
+        platforms: { type: array, items: { type: string } }
+        description: { type: string }
+        url: { type: string, nullable: true }
+        mitigations:
+          type: array
+          items: { $ref: '#/components/schemas/Mitigation' }
+        subtechniques:
+          type: array
+          items:
+            type: object
+            properties:
+              technique_id: { type: string }
+              name: { type: string }
+        counts: { type: object, additionalProperties: { type: integer } }
+        items:
+          type: object
+          description: Chunks per source (procedure, cti, cve), up to `limit` each
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/KnowledgeItem' }
 
     KnowledgeBase:
       type: object
