@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.4.3
+  version: 0.4.4
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
@@ -370,6 +370,37 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /incidents/{incident_id}/model-explanation:
+    parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema: { type: string, example: INC-0040 }
+    get:
+      tags: [Incidents]
+      operationId: getModelExplanation
+      summary: Why the model flagged the incident's top edge (GNNExplainer)
+      description: |
+        Runs GNNExplainer on the GraphSAGE attack head for the incident's highest-probability edge: which
+        neighbouring links the model relied on (edge mask), which node features mattered (node-feature mask),
+        and which of the edge's own features drove the score (gradient saliency). `faithfulness` re-scores the
+        edge with its top features set to 0 (the training mean). The first call starts a background job
+        (`status: computing`); poll until `ready`. The result is cached and recomputed only when the incident
+        gets a new top edge. `unavailable` when the detector is not GraphSAGE.
+      responses:
+        '200':
+          description: Model explanation (or its status)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModelExplanation' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such incident
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /metrics:
     get:
       tags: [Research]
@@ -673,6 +704,59 @@ components:
         fallback_to_tactic: { type: boolean }
         latency_ms: { type: integer }
         behavior_check: { $ref: '#/components/schemas/BehaviorCheck' }
+
+    FeatureImportance:
+      type: object
+      required: [feature, label, importance, share]
+      properties:
+        feature: { type: string, example: unique_destination_ports }
+        label: { type: string, example: Distinct destination ports }
+        importance: { type: number }
+        share: { type: number, description: importance / the largest importance in the list (0-1) }
+        value:
+          description: Edge features only; the edge's own unscaled value (a category for one-hot features)
+          nullable: true
+          oneOf: [{ type: number }, { type: string }]
+
+    ModelExplanation:
+      type: object
+      required: [incident_id, status]
+      properties:
+        incident_id: { type: string }
+        status: { type: string, enum: [unavailable, computing, ready, error] }
+        message: { type: string }
+        edge:
+          type: object
+          properties:
+            event_id: { type: string }
+            window_start: { type: string, format: date-time }
+            source_ip: { type: string }
+            destination_ip: { type: string }
+            attack_probability: { type: number }
+        method: { type: string }
+        edge_features: { type: array, items: { $ref: '#/components/schemas/FeatureImportance' } }
+        node_features: { type: array, items: { $ref: '#/components/schemas/FeatureImportance' } }
+        neighbor_edges:
+          type: array
+          items:
+            type: object
+            required: [source_ip, destination_ip, importance, share, is_explained_edge]
+            properties:
+              source_ip: { type: string }
+              destination_ip: { type: string }
+              importance: { type: number }
+              share: { type: number }
+              is_explained_edge: { type: boolean }
+        faithfulness:
+          type: object
+          properties:
+            features_removed: { type: array, items: { type: string } }
+            probability_before: { type: number }
+            probability_after: { type: number }
+            logit_drop: { type: number }
+        seconds: { type: number }
+        started_at: { type: string, format: date-time }
+        computed_at: { type: string, format: date-time }
 
     WindowGraph:
       type: object
