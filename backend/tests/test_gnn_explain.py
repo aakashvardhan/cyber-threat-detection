@@ -91,3 +91,11 @@ def test_endpoint_is_unavailable_for_other_detectors(client):
     body = client.get(f"/incidents/{incidents[0]['incident_id']}/model-explanation").json()
     assert body["status"] == "unavailable" and body["incident_id"] == incidents[0]["incident_id"]
     assert client.get("/incidents/INC-9999/model-explanation").status_code == 404
+
+
+def test_research_counts_every_technique_an_llm_names():
+    from app.research import ModelOutputs
+    rows = [{"model": "Mistral", "label": "attack", "attack_probability": 1.0, "technique_id": "T1078", "techniques": ["T1078", "T1595"]},
+            {"model": "Mistral", "label": "attack", "attack_probability": 0.9, "technique_id": "T1595", "techniques": ["T1595"]}]
+    out = ModelOutputs({"e1": [rows[0]], "e2": [rows[1]]}).for_incident(["e1", "e2"])
+    assert out[0]["technique_id"] == "T1595"          # named on both edges, not just the first in the alphabetical list
