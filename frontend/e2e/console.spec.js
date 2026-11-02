@@ -98,6 +98,11 @@ test('5. Incident detail shows explanation, evidence and the evidence funnel', a
   if ((await detail.json()).retrieval_trace?.behavior_check) {        // backend with the RAG behaviour check (API 0.4.2)
     await expect(page.getByRole('heading', { name: 'Behaviour check' })).toBeVisible();
   }
+  const mx = await page.request.get(`${API}${new URL(page.url()).pathname}/model-explanation`, { headers: { 'X-API-Key': KEY } });
+  if (mx.ok() && (await mx.json()).status !== 'unavailable') {     // GraphSAGE backend with GNNExplainer (API 0.4.4)
+    await expect(page.getByRole('heading', { name: 'Why the model flagged this edge' })).toBeVisible();
+    await expect(page.getByText("This connection's features")).toBeVisible({ timeout: 20_000 });
+  }
 });
 
 test('6. Confirm attack updates the status and the list counts', async ({ page, request }) => {

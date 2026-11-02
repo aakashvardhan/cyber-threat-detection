@@ -253,3 +253,9 @@ a.kpi:hover { background: var(--raised); text-decoration: none; }
 .seg button { background: transparent; color: var(--muted); border: none; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
 .seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .seg-sm button { padding: 4px 10px; font-size: 12px; }
+
+/* model explanation (GNNExplainer) */
+.mini-head { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
+.imp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.imp-list li { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(56px, 1fr); align-items: center; gap: 10px; font-size: 13px; }
+.imp-label { overflow-wrap: anywhere; line-height: 1.3; }

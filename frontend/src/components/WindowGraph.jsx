@@ -31,7 +31,7 @@ function otherGroups(ips, edges) {
   }
   return groups.sort((a, b) => b.leaves.length - a.leaves.length);
 }
-const COLORS = { attack: '#FF4040', normal: '#5F7A96', refused: '#F5B14C', muted: '#9AA9BC', text: '#E6EDF3', bg: '#0E1621', panel: '#1B2838', border: '#2A3B50' };
+const COLORS = { relied: '#4CB3E6', attack: '#FF4040', normal: '#5F7A96', refused: '#F5B14C', muted: '#9AA9BC', text: '#E6EDF3', bg: '#0E1621', panel: '#1B2838', border: '#2A3B50' };
 const MONO = 'ui-monospace, Menlo, Consolas, monospace';
 
 const lastOctets = (ip, n = 1) => '.' + ip.split('.').slice(-n).join('.');
@@ -89,7 +89,7 @@ function story(g, s) {
   return parts.join(' ');
 }
 
-export default function WindowGraph({ inc }) {
+export default function WindowGraph({ inc, explained = null }) {
   const [view, setView] = useState('summary');
   const [scope, setScope] = useState('two_hop');
   const [windowStart, setWindowStart] = useState(null);
@@ -135,7 +135,7 @@ export default function WindowGraph({ inc }) {
         <div><span>Data sent</span><strong>{bytes(s.sent)}</strong></div>
         <div><span>Flagged by the model</span><strong style={{ color: s.flagged ? COLORS.attack : undefined }}>{num(s.flagged)} of {plural(s.twoHop, 'link')}</strong></div>
       </div>
-      {view === 'summary' ? <SummaryFlow g={g} s={s} /> : <NetworkView g={g} scope={scope} setScope={setScope} />}
+      {view === 'summary' ? <SummaryFlow g={g} s={s} /> : <NetworkView g={g} scope={scope} setScope={setScope} explained={explained?.edge?.window_start === g.window_start ? explained : null} />}
       {g.truncated && <p className="small muted" style={{ padding: '0 20px 14px' }}>The window has {num(g.window_edge_count)} edges; showing the ones around this source and the most suspicious of the rest.</p>}
     </section>
   );
@@ -220,7 +220,9 @@ function SummaryFlow({ g, s }) {
 }
 
 /* ---------------- Network: radial graph ---------------- */
-function NetworkView({ g, scope, setScope }) {
+function NetworkView({ g, scope, setScope, explained }) {
+  // links GNNExplainer says the model relied on, for the incident's top edge in this window
+  const relied = useMemo(() => Object.fromEntries((explained?.neighbor_edges || []).map((n) => [`${n.source_ip}>${n.destination_ip}`, n.share])), [explained]);
   const [hover, setHover] = useState(null);
   const box = useRef(null);
   const at = (ev) => { const r = box.current.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top, w: r.width }; };
@@ -289,6 +291,10 @@ function NetworkView({ g, scope, setScope }) {
             return (
               <g key={`${e.source_ip}>${e.destination_ip}`} onMouseEnter={(ev) => setHover({ edge: e, ...at(ev) })} onMouseLeave={() => setHover(null)}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={12} />
+                {relied[`${e.source_ip}>${e.destination_ip}`] != null && (
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={COLORS.relied} strokeLinecap="round"
+                    strokeWidth={5 + 7 * relied[`${e.source_ip}>${e.destination_ip}`]} strokeOpacity={0.35} />
+                )}
                 <line x1={x1 + (dx / L) * r1} y1={y1 + (dy / L) * r1} x2={x2 - (dx / L) * 12} y2={y2 - (dy / L) * 12}
                   stroke={col} strokeWidth={on ? 3.5 : Math.min(1 + Math.log2(1 + e.connection_count) * 0.6, 4)} strokeOpacity={on ? 1 : e.in_two_hop ? 0.8 : 0.35} markerEnd={`url(#net-${e.flagged ? 'r' : 'g'})`} />
               </g>
@@ -349,6 +355,9 @@ function NetworkView({ g, scope, setScope }) {
         <span><svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke={COLORS.attack} strokeWidth="2" /></svg>Flagged by the model (p ≥ {g.threshold})</span>
         <span><svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke={COLORS.normal} strokeWidth="2" /></svg>Not flagged</span>
         <span><svg width="26" height="10"><line x1="0" y1="5" x2="26" y2="5" stroke={COLORS.attack} strokeOpacity="0.35" strokeWidth="2" /></svg>Faded: link not connected to this source</span>
+        {Object.keys(relied).length > 0 && (
+          <span><svg width="26" height="12"><line x1="2" y1="6" x2="24" y2="6" stroke={COLORS.relied} strokeOpacity="0.45" strokeWidth="9" strokeLinecap="round" /></svg>Relied on by the model (GNNExplainer)</span>
+        )}
         <p className="muted" style={{ margin: '6px 0 0' }}>"Around this source" is what the model looks at for this source's links: every link that touches the source or one of its targets. Hover a link for details.</p>
       </div>
     </div>

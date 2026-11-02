@@ -163,6 +163,7 @@ function Breadcrumb({ id }) {
 /* ---------------- Triage ---------------- */
 
 function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
+  const mx = useModelExplanation(inc.incident_id, inc.edge_count);
   const [selected, setSelected] = useState(0);
   const ex = inc.explanation || {};
   const sentences = ex.sentences || [];
@@ -239,10 +240,11 @@ function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
         <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
           <MitrePanel inc={inc} />
           <BehaviorPanel inc={inc} saving={saving} onUse={onUseTechnique} />
+          <ModelExplanationPanel mx={mx} />
           <TrafficSummary edges={inc.edges} />
         </div>
       </div>
-      <WindowGraph inc={inc} />
+      <WindowGraph inc={inc} explained={mx?.status === 'ready' ? mx : null} />
       <EdgesTable edges={inc.edges} />
     </>
   );
@@ -317,6 +319,101 @@ function BehaviorPanel({ inc, saving, onUse }) {
           <summary>Traffic facts searched</summary>
           <p className="mono small" style={{ marginTop: 6 }}>{check.facts}</p>
         </details>
+      </div>
+    </section>
+  );
+}
+
+/** GNNExplainer result for the incident's top edge; polls while the backend is computing it. */
+function useModelExplanation(id, edgeCount) {
+  const [mx, setMx] = useState(null);
+  useEffect(() => {
+    let alive = true, timer;
+    const load = () => api.modelExplanation(id)
+      .then((r) => { if (!alive) return; setMx(r); if (r.status === 'computing') timer = setTimeout(load, 1000); })
+      .catch((e) => { if (alive) setMx(e.status === 404 ? null : { status: 'error', message: e.message }); });
+    load();
+    return () => { alive = false; clearTimeout(timer); };
+  }, [id, edgeCount]);
+  return mx;
+}
+
+function ImportanceList({ items, showValue }) {
+  return (
+    <ul className="imp-list">
+      {items.map((f) => (
+        <li key={f.feature}>
+          <span className="imp-label">{f.label}{showValue && f.value != null && <span className="mono muted"> {typeof f.value === 'number' ? num(f.value) : f.value}</span>}</span>
+          <span className="bar-track"><span className="bar-fill" style={{ width: `${Math.max(4, f.share * 100)}%`, background: 'var(--accent)' }} /></span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ModelExplanationPanel({ mx }) {
+  if (!mx || mx.status === 'unavailable') return null;     // other detectors, or an older backend
+  const head = (
+    <div className="panel-head"><h2>Why the model flagged this edge</h2><span className="small muted">GNNExplainer</span></div>
+  );
+  if (mx.status === 'computing') {
+    return (
+      <section className="panel" aria-label="Why the model flagged this edge">{head}
+        <div className="panel-body"><div className="generating small"><span className="pulse" />Analysing which links and features the model relied on…</div></div>
+      </section>
+    );
+  }
+  if (mx.status === 'error') {
+    return (
+      <section className="panel" aria-label="Why the model flagged this edge">{head}
+        <div className="panel-body"><div className="note note-error small">The model explanation failed: {mx.message}</div></div>
+      </section>
+    );
+  }
+  const f = mx.faithfulness;
+  const drop = f && f.probability_before - f.probability_after;
+  const others = mx.neighbor_edges.filter((n) => !n.is_explained_edge);
+  return (
+    <section className="panel" aria-label="Why the model flagged this edge">{head}
+      <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="small">
+          <span className="mono">{mx.edge.source_ip} → {mx.edge.destination_ip}</span>
+          <span className="muted"> · attack probability </span><strong className="mono">{prob(mx.edge.attack_probability)}</strong>
+          <span className="muted"> · {hhmm(mx.edge.window_start)}</span>
+        </div>
+        <div>
+          <h3 className="mini-head">This connection's features</h3>
+          <ImportanceList items={mx.edge_features} showValue />
+        </div>
+        {f && (
+          <p className="small" style={{ margin: 0 }}>
+            {drop >= 0.1
+              ? <>Setting these five to typical values lowers the attack probability from <strong className="mono">{prob(f.probability_before)}</strong> to <strong className="mono">{prob(f.probability_after)}</strong>, so they drive the decision.</>
+              : <>Setting these five to typical values barely changes the score ({prob(f.probability_before)} → {prob(f.probability_after)}): the decision comes mostly from how the two hosts behave in this window (below).</>}
+          </p>
+        )}
+        {others.length === 0 && (
+          <p className="small muted" style={{ margin: 0 }}>No other link changed this prediction. GraphSAGE builds each host's picture from the links coming into it, and here this is the only one entering these two hosts.</p>
+        )}
+        {others.length > 0 && (
+          <div>
+            <h3 className="mini-head">Neighbouring links it relied on</h3>
+            <ul className="imp-list">
+              {others.slice(0, 4).map((n) => (
+                <li key={`${n.source_ip}>${n.destination_ip}`}>
+                  <span className="imp-label mono small">{n.source_ip} → {n.destination_ip}</span>
+                  <span className="bar-track"><span className="bar-fill" style={{ width: `${Math.max(4, n.share * 100)}%`, background: 'var(--accent)' }} /></span>
+                </li>
+              ))}
+            </ul>
+            <p className="small muted" style={{ margin: '6px 0 0' }}>Highlighted in the network graph below.</p>
+          </div>
+        )}
+        <details className="small muted" open={!f || drop < 0.1}>
+          <summary>Host behaviour the model weighed</summary>
+          <div style={{ marginTop: 8 }}><ImportanceList items={mx.node_features} /></div>
+        </details>
+        <p className="small muted" style={{ margin: 0 }}>{mx.method}. Bars are relative within each list.</p>
       </div>
     </section>
   );
@@ -497,7 +594,7 @@ function Research({ inc }) {
     <section className="panel">
       <div className="panel-head"><h2>How each model judged this incident</h2></div>
       <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <p className="note note-warn">The models share the same graph encoder, so agreement between them is not independent evidence.</p>
+        <p className="small muted" style={{ margin: 0 }}>GraphSAGE and HGT read the 5-minute window graph; Mistral and Qwen read a text summary of each connection. Mistral and Qwen were scored on a 7,882-edge sample of the test set, so they only appear when the incident includes sampled edges. Full metrics: GET /metrics.</p>
         <div className="table-scroll">
           <div style={{ minWidth: 640 }}>
             <div className="model-cols thead"><span>Model</span><span>Verdict</span><span>Attack probability</span><span>Top technique</span><span>Confidence</span><span>Groundedness</span></div>
@@ -513,7 +610,7 @@ function Research({ inc }) {
             ))}
           </div>
         </div>
-        {inc.models.length < 5 && <p className="small muted">Only {plural(inc.models.length, 'model')} reported. The other models appear here once the evaluation notebooks export model_outputs.jsonl to the backend.</p>}
+        {inc.models.length === 0 && <p className="small muted">No model outputs loaded. Put model_outputs.jsonl in the backend data folder (MODEL_OUTPUTS).</p>}
       </div>
     </section>
   );
