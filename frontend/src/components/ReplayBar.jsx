@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { SPEEDS, useReplay } from '../state/ReplayContext.jsx';
 import { dateTime, hhmm, num, shortDate } from '../utils/format.js';
-import { PauseIcon, PlayIcon } from './icons.jsx';
+import { PlayIcon, StopIcon } from './icons.jsx';
 
 const WINDOW_MS = 5 * 60 * 1000;
 const BINS = 120;
@@ -23,8 +23,8 @@ function usePeriod(data) {
 
 function stateText(playing, finished, hasData) {
   if (!hasData) return 'Not started';
-  if (finished) return 'Finished, restart to replay again';
-  return playing ? 'Playing, detecting live' : 'Paused';
+  if (finished) return 'Finished, reset to run again';
+  return playing ? 'Running, detecting live' : 'Stopped';
 }
 
 /** Full replay controls with the whole-period traffic strip (Overview). */
@@ -69,10 +69,10 @@ export default function ReplayBar() {
   const years = useMemo(() => [...new Set(days.map((d) => d.slice(0, 4)))], [days]);
 
   return (
-    <section className="replay" aria-label="Replay">
+    <section className="replay" aria-label="Detection controls">
       <div className="replay-controls">
-        <button className="btn btn-primary" onClick={replay.togglePlay} disabled={finished} aria-label={playing ? 'Pause replay' : 'Play replay'}>
-          {playing ? <PauseIcon /> : <PlayIcon />}{playing ? 'Pause' : 'Play'}
+        <button className="btn btn-primary" onClick={replay.togglePlay} disabled={finished} aria-label={playing ? 'Stop detection' : 'Start detection'}>
+          {playing ? <StopIcon /> : <PlayIcon />}{playing ? 'Stop' : 'Start'}
         </button>
         <button className="btn" onClick={replay.step} disabled={finished}>Step one window</button>
         <label className="replay-speed">
@@ -82,7 +82,7 @@ export default function ReplayBar() {
           </select>
         </label>
         <div className="replay-clock" aria-live="polite">
-          <strong>{pos?.window_start ? dateTime(pos.window_start) : 'Press Play to start the replay'}</strong>
+          <strong>{pos?.window_start ? dateTime(pos.window_start) : 'Press Start to begin detection'}</strong>
           <span className="muted small">
             {pos?.window_index ? `Window ${num(pos.window_index)} of ${num(pos.window_count)} · ` : ''}
             {stateText(playing, finished, !!pos?.window_index)}
@@ -104,7 +104,7 @@ export default function ReplayBar() {
               </select>
             </label>
           )}
-          <button className="btn btn-ghost" onClick={replay.restart}>Restart</button>
+          <button className="btn btn-ghost" onClick={replay.restart} title="Clear all incidents and start again from the first window">Reset</button>
         </div>
       </div>
 
@@ -112,7 +112,7 @@ export default function ReplayBar() {
         <>
           <div className="rails">
             <div className="rail-labels small"><span className="muted">All traffic</span><span style={{ color: 'var(--sev-medium)' }}>Flagged as attack</span></div>
-            <div className="rail-area" role="img" aria-label={`Traffic per period across the test split. The replay is ${Math.round(rails.head)}% through.`}>
+            <div className="rail-area" role="img" aria-label={`Traffic per period across the test split. Detection is ${Math.round(rails.head)}% through.`}>
               <div className="rail" style={{ height: 14 }}>
                 {rails.normal.map((v, i) => (
                   <span key={i} style={{ height: rails.done[i] ? `${3 + (v / rails.maxN) * 11}px` : '3px', background: rails.done[i] ? 'var(--normal)' : 'var(--normal-dim)' }} />
@@ -128,7 +128,7 @@ export default function ReplayBar() {
           </div>
           <div className="rail-foot small muted">
             <span className="mono small">{shortDate(new Date(period.start).toISOString())}</span>
-            <span>Each row on its own scale · dimmed = not replayed yet</span>
+            <span>Each row on its own scale · dimmed = not processed yet</span>
             <span className="mono small">{shortDate(new Date(period.end - WINDOW_MS).toISOString())}</span>
           </div>
         </>
@@ -143,16 +143,16 @@ export function ReplayStrip() {
   const pos = data?.replay;
   const progress = pos?.window_count ? (pos.window_index / pos.window_count) * 100 : 0;
   return (
-    <section className="replay replay-strip" aria-label="Replay">
+    <section className="replay replay-strip" aria-label="Detection status">
       <span className="status">
         <span className="dot" style={{ background: playing ? 'var(--ok)' : 'var(--muted)' }} />
-        <strong>{playing ? 'Replay playing' : finished ? 'Replay finished' : 'Replay paused'}</strong>
+        <strong>{playing ? 'Detection running' : finished ? 'Detection finished' : 'Detection stopped'}</strong>
       </span>
       {pos?.window_start && (
         <span className="muted">{dateTime(pos.window_start)} · window {num(pos.window_index)} of {num(pos.window_count)}</span>
       )}
       <span className="strip-track"><span style={{ width: `${progress}%` }} /></span>
-      <button className="btn btn-sm" onClick={togglePlay} disabled={finished}>{playing ? 'Pause' : 'Play'}</button>
+      <button className="btn btn-sm" onClick={togglePlay} disabled={finished}>{playing ? 'Stop' : 'Start'}</button>
     </section>
   );
 }

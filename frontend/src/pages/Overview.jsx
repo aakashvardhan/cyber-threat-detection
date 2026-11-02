@@ -54,7 +54,7 @@ export default function Overview() {
         <header className="page-head">
           <div>
             <h1>Overview</h1>
-            <p>What the replay has found so far. Updates after every window.</p>
+            <p>What detection has found so far. Updates after every window.</p>
           </div>
           <form onSubmit={onSearch} className="search">
             <label htmlFor="ip-search" className="sr-only">Search by IP</label>
@@ -104,7 +104,7 @@ export default function Overview() {
           <section className="panel" style={{ flex: '3 1 560px', minWidth: 0, paddingBottom: 6 }}>
             <div className="panel-head"><h2>Needs review</h2><Link to="/incidents">All incidents</Link></div>
             {stats.needsReview.length === 0 ? (
-              <p className="empty">{data?.replay?.window_index ? 'No incidents waiting for review.' : 'Press Play to start detecting.'}</p>
+              <p className="empty">{data?.replay?.window_index ? 'No incidents waiting for review.' : 'Press Start to begin detecting.'}</p>
             ) : (
               <div className="table-scroll">
                 <div style={{ minWidth: 640 }}>
@@ -208,7 +208,7 @@ function TrafficPanel({ windows, clock }) {
     <section className="panel">
       <div className="panel-head"><h2>Traffic</h2><span className="small muted">Last 6 hours, per 5-minute window</span></div>
       <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, position: 'relative' }}>
-        {!t ? <p className="muted">No windows replayed yet.</p> : (
+        {!t ? <p className="muted">No windows processed yet.</p> : (
           <>
             <div className="lane">
               <span className="lane-head small"><span className="muted">Normal</span>{t.avgN > 0 && <span className="mono small muted">about {num(t.avgN)} edges per window</span>}</span>
@@ -237,7 +237,7 @@ function TrafficPanel({ windows, clock }) {
             <p className="small muted">
               Each row has its own scale, because normal traffic is much larger than flagged traffic.
               The red part of a flagged bar is the edges the model is at least {Math.round(URGENT_PROBABILITY * 100)}% sure of, the same level as High-confidence incidents.
-              {t.missing > 0 && ' Shaded gaps are 5-minute windows with no recorded traffic in the test split, or not replayed yet.'}
+              {t.missing > 0 && ' Shaded gaps are 5-minute windows with no recorded traffic in the test split, or not processed yet.'}
             </p>
           </>
         )}

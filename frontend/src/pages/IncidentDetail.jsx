@@ -552,7 +552,7 @@ function Response({ inc, saving, update }) {
                 {a.note && <span className="muted">Note: {a.note}</span>}
               </div>
             ))}
-            {(inc.activity || []).length > 0 && <p className="small muted">Times are when the analyst acted, not replay time.</p>}
+            {(inc.activity || []).length > 0 && <p className="small muted">Times are when the analyst acted, not traffic time.</p>}
           </div>
         </section>
       </div>

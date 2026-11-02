@@ -58,13 +58,13 @@ test('2. Step advances the replay by exactly one window', async ({ page }) => {
   await expect(page.locator('.replay-clock')).toContainText(`Window ${(before + 1).toLocaleString('en-US')} of`);
 });
 
-test('3. Play keeps detecting until Pause', async ({ page }) => {
+test('3. Start keeps detecting until Stop', async ({ page }) => {
   await page.goto('/');
   await page.locator('.replay-speed select').first().selectOption('250');
   const before = await windowIndex(page);
-  await page.getByRole('button', { name: 'Play replay' }).click();
+  await page.getByRole('button', { name: 'Start detection' }).click();
   await expect.poll(() => windowIndex(page), { timeout: 15_000 }).toBeGreaterThan(before + 2);
-  await page.getByRole('button', { name: 'Pause replay' }).click();
+  await page.getByRole('button', { name: 'Stop detection' }).click();
   const paused = await windowIndex(page);
   await page.waitForTimeout(1500);
   expect(await windowIndex(page)).toBeLessThanOrEqual(paused + 1); // at most one in-flight window
@@ -198,20 +198,25 @@ test('13. Evaluation compares the models from GET /metrics', async ({ page }) =>
   const metrics = await (await page.request.get(`${API}/metrics`, { headers: { 'X-API-Key': KEY } })).json();
   const graph = metrics.models.find((m) => m.detection && !/sample/i.test(m.test_set || '') && !/\+ RAG/.test(m.model));
   if (graph) await expect(page.locator('.eval-table').first()).toContainText(graph.model);
+  await page.getByRole('button', { name: /Full test split/ }).click();
+  await expect(page.locator('.eval-table').first()).not.toContainText('Mistral');
+  await page.getByRole('tab', { name: 'RAG ablation' }).click();
+  await expect(page.getByRole('heading', { name: 'RAG ablations' })).toBeVisible();
 });
 
-test('14. Knowledge base lists techniques and opens one', async ({ page }) => {
+test('14. Knowledge base lists the predicted techniques and opens one', async ({ page }) => {
   await page.goto('/knowledge-base');
   await expect(page.getByRole('heading', { name: 'Knowledge base' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Techniques the model predicts' })).toBeVisible();
   await page.getByLabel('Search techniques').fill('T1110');
-  const row = page.locator('.kb-table tbody tr').first();
-  await expect(row).toContainText('Brute Force');
-  await row.click();
+  await page.getByRole('button', { name: /T1110\s+Brute Force/ }).click();
   await expect(page).toHaveURL(/t=T1110/);
-  await expect(page.getByRole('region', { name: /T1110 Brute Force/ })).toContainText('Mitigations');
+  const detail = page.getByRole('region', { name: /T1110 Brute Force/ });
+  await detail.getByRole('tab', { name: /MITRE/ }).click();
+  await expect(detail).toContainText('Mitigations');
 });
 
-test('15. Switching the live model restarts the replay', async ({ page, request }) => {
+test('15. Switching the live model resets detection', async ({ page, request }) => {
   const models = await api(request, 'GET', '/models');
   const other = models.models.find((m) => m.live && m.available && !m.active);
   test.skip(!other, 'only one live model installed');
@@ -224,7 +229,7 @@ test('15. Switching the live model restarts the replay', async ({ page, request 
     expect((await api(request, 'GET', '/models')).active).toBe(other.id);
     const after = await api(request, 'GET', '/incidents');
     expect(after.primary_model).toBe(other.name);
-    expect(after.incidents).toEqual([]);   // the replay restarted
+    expect(after.incidents).toEqual([]);   // detection starts over
   } finally {
     await api(request, 'POST', '/models/active', { model: models.active });   // leave the backend as it was
   }

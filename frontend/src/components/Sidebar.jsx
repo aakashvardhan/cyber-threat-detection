@@ -10,11 +10,11 @@ function monthYear(iso) {
 
 // The test split is a stratified sample of 5-minute windows from several capture weeks, not a continuous period.
 function replayText(r) {
-  if (!r?.window_count) return 'Replaying the test split';
+  if (!r?.window_count) return 'Source: test split';
   const days = r.day_starts?.length;
   const span = r.first_window_start && r.last_window_start
     ? ` between ${monthYear(r.first_window_start)} and ${monthYear(r.last_window_start)}` : '';
-  return `${r.window_count.toLocaleString('en-US')} test windows${days ? ` on ${days} sampled days` : ''}${span}`;
+  return `Source: ${r.window_count.toLocaleString('en-US')} test windows${days ? ` on ${days} sampled days` : ''}${span}`;
 }
 
 function ModelSwitcher() {
@@ -65,7 +65,7 @@ function ModelSwitcher() {
       </select>
       {pending && (
         <div className="model-confirm">
-          <span>Switching restarts the replay with {live.find((m) => m.id === pending)?.name}.</span>
+          <span>Switching resets detection and starts over with {live.find((m) => m.id === pending)?.name}.</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="btn btn-primary btn-sm" disabled={busy} onClick={choose}>{busy ? 'Switching…' : 'Switch'}</button>
             <button className="btn btn-sm" disabled={busy} onClick={() => setPending(null)}>Cancel</button>
