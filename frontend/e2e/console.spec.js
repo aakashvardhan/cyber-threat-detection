@@ -45,7 +45,8 @@ test('1. Overview loads data from the backend', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.locator('.replay-clock')).toContainText(`Window ${warmed.toLocaleString('en-US')} of`);
-  await expect(page.locator('.model-box strong')).not.toHaveText('…');
+  await expect(page.locator('.model-box')).toContainText(/GraphSAGE|HGT|model_|heuristic/);
+  await expect(page.locator('.model-box')).toContainText('sampled days');
   await expect(page.locator('.kpi-value').first()).not.toHaveText('0');
   expect(errors).toEqual([]);
 });
@@ -100,7 +101,7 @@ test('5. Incident detail shows explanation, evidence and the evidence funnel', a
   }
   const mx = await page.request.get(`${API}${new URL(page.url()).pathname}/model-explanation`, { headers: { 'X-API-Key': KEY } });
   if (mx.ok() && (await mx.json()).status !== 'unavailable') {     // GraphSAGE backend with GNNExplainer (API 0.4.4)
-    await expect(page.getByRole('heading', { name: 'Why the model flagged this edge' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Model explanation' })).toBeVisible();
     await expect(page.getByText("This connection's features")).toBeVisible({ timeout: 20_000 });
   }
 });
@@ -188,4 +189,43 @@ test('12. A wrong API key is explained', async ({ page }) => {
   await page.route(`${API}/**`, (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Invalid API key"}' }));
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('API key was rejected');
+});
+
+test('13. Evaluation compares the models from GET /metrics', async ({ page }) => {
+  await page.goto('/evaluation');
+  await expect(page.getByRole('heading', { name: 'Evaluation' })).toBeVisible();
+  await expect(page.locator('.eval-table').first()).toBeVisible();
+  const metrics = await (await page.request.get(`${API}/metrics`, { headers: { 'X-API-Key': KEY } })).json();
+  const graph = metrics.models.find((m) => m.detection && !/sample/i.test(m.test_set || '') && !/\+ RAG/.test(m.model));
+  if (graph) await expect(page.locator('.eval-table').first()).toContainText(graph.model);
+});
+
+test('14. Knowledge base lists techniques and opens one', async ({ page }) => {
+  await page.goto('/knowledge-base');
+  await expect(page.getByRole('heading', { name: 'Knowledge base' })).toBeVisible();
+  await page.getByLabel('Search techniques').fill('T1110');
+  const row = page.locator('.kb-table tbody tr').first();
+  await expect(row).toContainText('Brute Force');
+  await row.click();
+  await expect(page).toHaveURL(/t=T1110/);
+  await expect(page.getByRole('region', { name: /T1110 Brute Force/ })).toContainText('Mitigations');
+});
+
+test('15. Switching the live model restarts the replay', async ({ page, request }) => {
+  const models = await api(request, 'GET', '/models');
+  const other = models.models.find((m) => m.live && m.available && !m.active);
+  test.skip(!other, 'only one live model installed');
+  try {
+    await page.goto('/');
+    await page.getByLabel('Live model').selectOption(other.id);
+    await page.getByRole('button', { name: 'Switch' }).click();
+    await expect(page.getByRole('button', { name: 'Switch' })).toHaveCount(0);
+    await expect(page.getByLabel('Live model')).toHaveValue(other.id);
+    expect((await api(request, 'GET', '/models')).active).toBe(other.id);
+    const after = await api(request, 'GET', '/incidents');
+    expect(after.primary_model).toBe(other.name);
+    expect(after.incidents).toEqual([]);   // the replay restarted
+  } finally {
+    await api(request, 'POST', '/models/active', { model: models.active });   // leave the backend as it was
+  }
 });

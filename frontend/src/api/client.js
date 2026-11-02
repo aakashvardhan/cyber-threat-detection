@@ -1,4 +1,4 @@
-// Thin client for the analyst console API (docs/api/openapi.yaml, v0.4.4).
+// Thin client for the analyst console API (docs/api/openapi.yaml, v0.5.0).
 // Base URL and key come from .env.local (see .env.example).
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -63,6 +63,13 @@ export const api = {
   /** Status, technique override, note, mitigations applied. */
   updateIncident: (id, update) => request('PATCH', `/incidents/${encodeURIComponent(id)}`, update),
   metrics: () => request('GET', '/metrics'),
+  /** Live models (GraphSAGE, HGT) and offline ones (LLMs). */
+  models: () => request('GET', '/models'),
+  /** Switch the live model; the backend restarts the replay. */
+  setModel: (id) => request('POST', '/models/active', { model: id }),
+  /** Every ATT&CK technique with the chunks the RAG pipeline can cite. */
+  knowledgeBase: () => request('GET', '/knowledge-base'),
+  knowledgeTechnique: (id, limit = 20) => request('GET', `/knowledge-base/${encodeURIComponent(id)}?limit=${limit}`),
   health: () => request('GET', '/health'),
 };
 

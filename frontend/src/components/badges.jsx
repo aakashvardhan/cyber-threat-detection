@@ -5,9 +5,9 @@ const SEV_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
 
 /** Severity is always written as a word; high adds a warning icon.
     When the primary model gives no severity, show a neutral "Unrated" chip. */
-export function SeverityChip({ severity }) {
+export function SeverityChip({ severity, long = false }) {
   if (!severity) {
-    return <span className="sev sev-none" title="The primary model gives no severity; ranked by attack probability">Unrated</span>;
+    return <span className="sev sev-none" title="The primary model gives no severity; ranked by attack probability">{long ? 'Severity: not rated' : 'Unrated'}</span>;
   }
   return (
     <span className={`sev sev-${severity}`}>

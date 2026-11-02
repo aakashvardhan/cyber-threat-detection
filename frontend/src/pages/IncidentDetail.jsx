@@ -17,7 +17,8 @@ const TABS = [['triage', 'Triage'], ['response', 'Response'], ['research', 'Rese
 export default function IncidentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { incidents, refresh: refreshList } = useReplay();
+  const { data: replayData, incidents, refresh: refreshList } = useReplay();
+  const primaryModel = replayData?.primary_model ?? 'GraphSAGE';
   const [inc, setInc] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [actionError, setActionError] = useState(null);
@@ -93,8 +94,8 @@ export default function IncidentDetail() {
                 ? <span className="sev sev-high"><WarnTriangle fill="var(--on-accent)" on="var(--sev-high)" />Attack</span>
                 : <span className="sev sev-low">Normal</span>}
               <span className="tag">Attack probability <strong className="mono">{prob(inc.max_attack_probability)}</strong></span>
-              <SeverityChip severity={inc.severity} />
-              <span className="tag">Confidence <strong className={inc.low_confidence ? 'warn-text' : ''}>{inc.low_confidence ? 'low' : 'normal'}</strong></span>
+              <SeverityChip severity={inc.severity} long />
+              <span className="tag" title={`Borderline means the attack probability is within 0.10 of the model threshold`}>Model confidence <strong className={inc.low_confidence ? 'warn-text' : ''}>{inc.low_confidence ? 'borderline' : 'clear'}</strong></span>
             </div>
           </div>
           <div className="detail-actions">
@@ -118,14 +119,6 @@ export default function IncidentDetail() {
                   Reopen
                 </button>
               )}
-              <label className="status" style={{ gap: 8 }}>
-                <span className="sr-only">Change status</span>
-                <select className="ctl" value="" disabled={saving} title="Correct the status, for example after a mistaken click"
-                  onChange={(e) => e.target.value && update({ status: e.target.value })}>
-                  <option value="">Change status…</option>
-                  {STATUSES.filter((s) => s !== inc.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                </select>
-              </label>
             </div>
             <ol className="stepper" aria-label="Status">
               {WORKFLOW.map((s) => {
@@ -134,6 +127,14 @@ export default function IncidentDetail() {
               })}
               {inc.status === 'dismissed' && <li className="is-current">Dismissed</li>}
             </ol>
+            <label className="status" style={{ gap: 8 }}>
+              <span className="sr-only">Change status</span>
+              <select className="ctl ctl-quiet" value="" disabled={saving} title="Correct the status, for example after a mistaken click"
+                onChange={(e) => e.target.value && update({ status: e.target.value })}>
+                <option value="">Change status…</option>
+                {STATUSES.filter((s) => s !== inc.status).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              </select>
+            </label>
           </div>
         </div>
         <div role="tablist" className="tabs" style={{ borderBottom: 'none' }}>
@@ -146,11 +147,11 @@ export default function IncidentDetail() {
       <div className="page">
         <ErrorNote message={actionError} />
         {tab === 'triage' && (
-          <Triage inc={inc} saving={saving} onRegenerate={() => load({ refresh: true })}
+          <Triage inc={inc} model={primaryModel} saving={saving} onRegenerate={() => load({ refresh: true })}
             onUseTechnique={(t) => update({ technique_override: t === inc.technique_id ? null : t })} />
         )}
         {tab === 'response' && <Response inc={inc} saving={saving} update={update} />}
-        {tab === 'research' && <Research inc={inc} />}
+        {tab === 'research' && <Research inc={inc} primary={primaryModel} />}
       </div>
     </>
   );
@@ -162,7 +163,7 @@ function Breadcrumb({ id }) {
 
 /* ---------------- Triage ---------------- */
 
-function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
+function Triage({ inc, model: primaryModel, saving, onRegenerate, onUseTechnique }) {
   const mx = useModelExplanation(inc.incident_id, inc.edge_count);
   const [selected, setSelected] = useState(0);
   const ex = inc.explanation || {};
@@ -221,7 +222,7 @@ function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
                         const level = e.level === 'tactic' ? 'Tactic fallback' : e.level === 'procedure' ? 'Procedure' : 'Technique';
                         return level !== (SOURCE_LABEL[e.source] || e.source) && <span className={`tag ${e.level === 'tactic' ? 'warn-text' : ''}`}>{level}</span>;
                       })()}
-                      <span className="mono muted" style={{ marginLeft: 'auto' }}>{e.score != null ? e.score.toFixed(2) : ''}</span>
+                      {e.score != null && <span className="muted" style={{ marginLeft: 'auto' }} title="Similarity between the incident and this source (1 = exact technique match)">relevance <span className="mono">{e.score.toFixed(2)}</span></span>}
                     </div>
                     <strong>{e.url ? <a href={e.url} target="_blank" rel="noreferrer">{e.title}</a> : e.title}</strong>
                     <p className="small muted clamp">{e.text}</p>
@@ -230,17 +231,17 @@ function Triage({ inc, saving, onRegenerate, onUseTechnique }) {
                 <p className="small muted">{inc.cve_status === 'applicable' ? 'CVE records were searched for this technique.' : 'No CVE applies to this technique.'}</p>
               </div>
             </div>
-            <details className="trace" open>
+            <details className="trace">
               <summary>How the evidence was found</summary>
               <EvidenceFunnel trace={inc.retrieval_trace} explanation={ex} evidenceCount={inc.evidence.length} />
             </details>
           </div>
         </section>
 
-        <div style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <ModelExplanationPanel mx={mx} model={primaryModel} />
           <MitrePanel inc={inc} />
           <BehaviorPanel inc={inc} saving={saving} onUse={onUseTechnique} />
-          <ModelExplanationPanel mx={mx} />
           <TrafficSummary edges={inc.edges} />
         </div>
       </div>
@@ -343,7 +344,7 @@ function ImportanceList({ items, showValue }) {
     <ul className="imp-list">
       {items.map((f) => (
         <li key={f.feature}>
-          <span className="imp-label">{f.label}{showValue && f.value != null && !f.label.includes(`= ${f.value}`) && <span className="mono muted"> {typeof f.value === 'number' ? num(f.value) : f.value}</span>}</span>
+          <span className="imp-label">{f.label}{showValue && f.value != null && !f.label.includes(`= ${f.value}`) && <span className="mono imp-value"> {typeof f.value === 'number' ? num(f.value) : f.value}</span>}</span>
           <span className="bar-track"><span className="bar-fill" style={{ width: `${Math.max(4, f.share * 100)}%`, background: 'var(--accent)' }} /></span>
         </li>
       ))}
@@ -351,21 +352,21 @@ function ImportanceList({ items, showValue }) {
   );
 }
 
-function ModelExplanationPanel({ mx }) {
+function ModelExplanationPanel({ mx, model }) {
   if (!mx || mx.status === 'unavailable') return null;     // other detectors, or an older backend
   const head = (
-    <div className="panel-head"><h2>Why the model flagged this edge</h2><span className="small muted">GNNExplainer</span></div>
+    <div className="panel-head"><h2>Model explanation</h2><span className="small muted">Why {model} flagged the top edge</span></div>
   );
   if (mx.status === 'computing') {
     return (
-      <section className="panel" aria-label="Why the model flagged this edge">{head}
+      <section className="panel" aria-label="Model explanation">{head}
         <div className="panel-body"><div className="generating small"><span className="pulse" />Analysing which links and features the model relied on…</div></div>
       </section>
     );
   }
   if (mx.status === 'error') {
     return (
-      <section className="panel" aria-label="Why the model flagged this edge">{head}
+      <section className="panel" aria-label="Model explanation">{head}
         <div className="panel-body"><div className="note note-error small">The model explanation failed: {mx.message}</div></div>
       </section>
     );
@@ -374,7 +375,7 @@ function ModelExplanationPanel({ mx }) {
   const drop = f && f.probability_before - f.probability_after;
   const others = mx.neighbor_edges.filter((n) => !n.is_explained_edge);
   return (
-    <section className="panel" aria-label="Why the model flagged this edge">{head}
+    <section className="panel" aria-label="Model explanation">{head}
       <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="small">
           <span className="mono">{mx.edge.source_ip} → {mx.edge.destination_ip}</span>
@@ -382,18 +383,18 @@ function ModelExplanationPanel({ mx }) {
           <span className="muted"> · {hhmm(mx.edge.window_start)}</span>
         </div>
         <div>
-          <h3 className="mini-head">This connection's features</h3>
+          <h3 className="mini-head">This connection's features <span className="muted" style={{ fontWeight: 400 }}>· bars relative to the strongest</span></h3>
           <ImportanceList items={mx.edge_features} showValue />
         </div>
         {f && (
-          <p className="small" style={{ margin: 0 }}>
-            {drop >= 0.1
-              ? <>Setting these five to typical values lowers the attack probability from <strong className="mono">{prob(f.probability_before)}</strong> to <strong className="mono">{prob(f.probability_after)}</strong>, so they drive the decision.</>
-              : <>Setting these five to typical values barely changes the score ({prob(f.probability_before)} → {prob(f.probability_after)}): the decision comes mostly from how the two hosts behave in this window (below).</>}
-          </p>
+          <div className="faith">
+            <span className="small muted">Attack probability with these five set to typical values</span>
+            <span className="faith-row"><strong className="mono">{prob(f.probability_before)}</strong><span aria-hidden="true">→</span><strong className="mono" style={{ color: drop >= 0.1 ? 'var(--ok)' : undefined }}>{prob(f.probability_after)}</strong></span>
+            <span className="small">{drop >= 0.1 ? 'These features drive the decision.' : 'Barely changes: how the two hosts behave in this window drives the decision (below).'}</span>
+          </div>
         )}
         {others.length === 0 && (
-          <p className="small muted" style={{ margin: 0 }}>No other link changed this prediction. GraphSAGE builds each host's picture from the links coming into it, and here this is the only one entering these two hosts.</p>
+          <p className="small muted" style={{ margin: 0 }}>No other link changed this prediction. {model} builds each host's picture from the links coming into it, and here this is the only one entering these two hosts.</p>
         )}
         {others.length > 0 && (
           <div>
@@ -413,7 +414,7 @@ function ModelExplanationPanel({ mx }) {
           <summary>Host behaviour the model weighed</summary>
           <div style={{ marginTop: 8 }}><ImportanceList items={mx.node_features} /></div>
         </details>
-        <p className="small muted" style={{ margin: 0 }}>{mx.method}. Bars are relative within each list.</p>
+        <p className="small muted" style={{ margin: 0 }}>{mx.method}.</p>
       </div>
     </section>
   );
@@ -589,28 +590,74 @@ function describeActivity(inc) {
 
 /* ---------------- Research ---------------- */
 
-function Research({ inc }) {
+const MODELS = [
+  { key: 'GraphSAGE', name: 'GraphSAGE', input: 'graph' },
+  { key: 'HGT', name: 'HGT', input: 'graph', full: 'Hierarchical Graph Transformer' },
+  { key: 'Mistral-7B multi-LoRA', name: 'Mistral (LoRA)', input: 'text', full: 'Mistral-7B, three LoRA adapters' },
+  { key: 'Qwen2.5-7B QLoRA', name: 'Qwen (QLoRA)', input: 'text', full: 'Qwen2.5-7B, 4-bit QLoRA' },
+];
+const RAG = 'RAG';
+
+function Research({ inc, primary: primaryName }) {
+  const byModel = Object.fromEntries(inc.models.map((m) => [m.model, m]));
+  // the live model's row is followed by the same verdict with the RAG explanation layer on top
+  const ragDef = { key: RAG, name: `${primaryName} + RAG`, input: 'graph', full: `${primaryName} detection with the RAG explanation on the Triage tab` };
+  const rows = MODELS.flatMap((m) => (m.key === primaryName ? [m, ragDef] : [m]));
+  if (!rows.includes(ragDef)) rows.unshift({ key: primaryName, name: primaryName, input: 'graph' }, ragDef);
+  const primary = byModel[primaryName];
+  if (primary) byModel[RAG] = { ...primary, model: ragDef.name, groundedness: inc.explanation?.groundedness ?? null };
+  const present = rows.filter((m) => byModel[m.key]);
+  const attack = present.filter((m) => byModel[m.key].label === 'attack').length;
+  const techCount = {};
+  present.forEach((m) => { const t = byModel[m.key].technique_id; if (t && m.key !== RAG) techCount[t] = (techCount[t] || 0) + 1; });
+  const scored = present.filter((m) => m.key !== RAG).length;
+  const [topTech, topN] = Object.entries(techCount).sort((x, y) => y[1] - x[1])[0] || [];
+  const na = (why) => <span className="muted" title={why}>n/a</span>;
   return (
     <section className="panel">
       <div className="panel-head"><h2>How each model judged this incident</h2></div>
       <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <p className="small muted" style={{ margin: 0 }}>GraphSAGE and HGT read the 5-minute window graph; Mistral and Qwen read a text summary of each connection. Mistral and Qwen were scored on a 7,882-edge sample of the test set, so they only appear when the incident includes sampled edges. Full metrics: GET /metrics.</p>
+        {present.length > 0 && (
+          <p style={{ margin: 0 }}>
+            <strong>{attack} of {present.length}</strong> say attack
+            {topTech && <> · <strong>{topN} of {scored}</strong> say <span className="mono">{topTech}</span></>}
+            <span className="small muted"> · techniques that differ from the live model are highlighted</span>
+          </p>
+        )}
         <div className="table-scroll">
-          <div style={{ minWidth: 640 }}>
+          <div style={{ minWidth: 760 }}>
             <div className="model-cols thead"><span>Model</span><span>Verdict</span><span>Attack probability</span><span>Top technique</span><span>Confidence</span><span>Groundedness</span></div>
-            {inc.models.map((m) => (
-              <div key={m.model} className="model-cols trow">
-                <span className="mono">{m.model}</span>
-                <span>{m.label === 'attack' ? <span style={{ color: 'var(--sev-high)', fontWeight: 600 }}>Attack</span> : 'Normal'}</span>
-                <span className="mono">{prob(m.attack_probability)}</span>
-                <span className="mono">{m.technique_id ?? '—'}</span>
-                <span className="mono">{prob(m.confidence)}</span>
-                <span className="mono">{prob(m.groundedness)}</span>
-              </div>
-            ))}
+            {rows.map((def) => {
+              const m = byModel[def.key];
+              if (!m) {
+                return (
+                  <div key={def.key} className="model-cols trow is-missing">
+                    <span className="model-name" title={def.full}>{def.name}</span>
+                    <span className="small muted" style={{ gridColumn: '2 / -1' }}>
+                      {def.input === 'text' ? 'Not evaluated: none of these edges are in the sample this model was scored on.' : 'No outputs loaded for this model.'}
+                    </span>
+                  </div>
+                );
+              }
+              const differs = m.technique_id && inc.technique_id && m.technique_id !== inc.technique_id;
+              return (
+                <div key={def.key} className="model-cols trow">
+                  <span className="model-name" title={def.full}>{def.name}<span className="small muted model-input">{def.input === 'graph' ? 'window graph' : 'text summary'}</span></span>
+                  <span>{m.label === 'attack' ? <span style={{ color: 'var(--sev-high)', fontWeight: 600 }}>Attack</span> : 'Normal'}</span>
+                  <span className="mono">{prob(m.attack_probability)}</span>
+                  <span className="mono" style={differs ? { color: 'var(--sev-medium)', fontWeight: 600 } : undefined}
+                    title={differs ? `The live model says ${inc.technique_id}` : undefined}>{m.technique_id ?? '—'}</span>
+                  <span className="mono">{m.confidence != null ? prob(m.confidence) : na(def.input === 'text' ? 'LLMs answer with labels, not per-technique scores' : 'No technique score for this edge')}</span>
+                  <span className="mono">{m.groundedness != null ? prob(m.groundedness) : na(def.key === RAG ? 'The explanation is still being written' : 'Only the live model + RAG writes a cited explanation')}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-        {inc.models.length === 0 && <p className="small muted">No model outputs loaded. Put model_outputs.jsonl in the backend data folder (MODEL_OUTPUTS).</p>}
+        <details className="small muted">
+          <summary>About these models</summary>
+          <p style={{ margin: '6px 0 0' }}>GraphSAGE and HGT read the 5-minute window graph; Mistral and Qwen read a text summary of each connection and were scored on a 7,882-edge sample of the test set, so they only appear when the incident includes sampled edges. The live model + RAG row uses the live model's verdict (switch it in the sidebar); its groundedness is the share of explanation sentences that cite evidence. Full metrics: the Evaluation page.</p>
+        </details>
       </div>
     </section>
   );

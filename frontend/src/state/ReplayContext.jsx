@@ -90,6 +90,14 @@ export function ReplayProvider({ children }) {
       await run({ reset: true });
       setSeenIds(null);
     },
+    /** Switch the live model; the backend restarts the replay, so the new model's incidents start fresh. */
+    switchModel: async (id) => {
+      setPlaying(false);
+      await api.setModel(id);
+      setFinished(false);
+      setSeenIds(null);
+      await refresh();
+    },
     markAllSeen: () => setSeenIds(new Set((data?.incidents ?? []).map((i) => i.incident_id))),
     refresh,
     clearError: () => setError(null),
