@@ -232,3 +232,11 @@ class VectorStore:
 
     def stats(self) -> dict:
         return {name: col.count() for name, col in self.cols.items()}
+
+    def items(self, collection: str, technique_id: str, limit: int = 20) -> list[dict]:
+        """Chunks linked to a parent technique, for browsing the knowledge base (no ranking)."""
+        col = self.cols.get(collection)
+        if col is None or not self.counts.get(collection, {}).get(technique_id):
+            return []
+        res = col.get(where={"technique_ids": {"$contains": technique_id}}, limit=limit, include=["documents", "metadatas"])
+        return [{"id": i, "text": d, "metadata": m or {}} for i, d, m in zip(res["ids"], res["documents"], res["metadatas"])]

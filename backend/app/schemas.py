@@ -314,3 +314,80 @@ class ModelExplanation(_Model):
     seconds: float | None = None
     started_at: str | None = None
     computed_at: str | None = None
+
+
+class ModelInfo(_Model):
+    id: str
+    name: str
+    live: bool
+    available: bool
+    active: bool
+    note: str | None = None
+
+
+class ModelList(_Model):
+    active: str
+    models: list[ModelInfo]
+
+
+class ModelSwitch(_Model):
+    model: str
+
+
+class KnowledgeSource(_Model):
+    source: str
+    items: int
+    chunks: int
+    techniques_linked: int
+
+
+class KnowledgeEntry(_Model):
+    technique_id: str
+    name: str
+    tactics: list[str]
+    procedure: int
+    cti: int
+    cve: int
+    mitigations: int
+    subtechniques: int
+    detector_class: bool
+
+
+class KnowledgeCatalog(_Model):
+    retrieval: str
+    sources: list[KnowledgeSource]
+    techniques: list[KnowledgeEntry]
+
+
+class KnowledgeItem(_Model):
+    NULLABLE = frozenset({"url"})
+    source: str
+    id: str
+    ref: str
+    title: str
+    text: str
+    url: str | None = None
+
+
+class KnowledgeMitigation(_Model):
+    mitigation_id: str
+    name: str
+
+
+class SubTechnique(_Model):
+    technique_id: str
+    name: str
+
+
+class KnowledgeTechnique(_Model):
+    NULLABLE = frozenset({"url"})
+    technique_id: str
+    name: str
+    tactics: list[str]
+    platforms: list[str]
+    description: str
+    url: str | None = None
+    mitigations: list[KnowledgeMitigation]
+    subtechniques: list[SubTechnique]
+    counts: dict[str, int]
+    items: dict[str, list[KnowledgeItem]]

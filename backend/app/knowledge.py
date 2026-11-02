@@ -225,6 +225,63 @@ class KnowledgeBase:
                  "latency_ms": int((time.perf_counter() - started) * 1000)}
         return Retrieval(evidence, trace, "applicable" if cve_applicable else "not_applicable", result["fallback_to_tactic"])
 
+    # ----- browsing (GET /knowledge-base) -----
+    COLLECTIONS = {"procedure": "procedures", "cti": "cti", "cve": "cve"}
+
+    def chunk_counts(self, technique_id: str) -> dict[str, int]:
+        parent = technique_id.split(".")[0]
+        if self.vector is not None:
+            return {s: int(self.vector.counts.get(c, {}).get(parent, 0)) for s, c in self.COLLECTIONS.items()}
+        return {s: len(self.by_technique.get(s, {}).get(parent, [])) for s in self.COLLECTIONS}
+
+    def catalog(self, detector_techniques: list[str]) -> list[dict]:
+        """Every ATT&CK technique (parents), with how much the RAG pipeline can cite for it."""
+        detector = {t.split(".")[0] for t in detector_techniques}
+        subs: dict[str, int] = {}
+        for tid, row in self.techniques.items():
+            if str(row.get("is_subtechnique", "")).lower() == "true":
+                subs[str(row.get("parent_id") or tid.split(".")[0])] = subs.get(str(row.get("parent_id") or tid.split(".")[0]), 0) + 1
+        out = []
+        for tid, row in sorted(self.techniques.items()):
+            if str(row.get("is_subtechnique", "")).lower() == "true":
+                continue
+            out.append({"technique_id": tid, "name": str(row.get("name", tid)), "tactics": self.tactics_of(tid),
+                        **self.chunk_counts(tid), "mitigations": len(self.mitigations_for(tid)),
+                        "subtechniques": subs.get(tid, 0), "detector_class": tid in detector})
+        return out
+
+    @staticmethod
+    def _item(source: str, chunk_id: str, text: str, meta: dict) -> dict:
+        return {"source": source, "id": chunk_id,
+                "ref": meta.get("source_attack_id") or meta.get("cve_id") or meta.get("report") or chunk_id,
+                "title": (meta.get("cve_id") or meta.get("source_name")
+                          or " ".join(x for x in [meta.get("apt_group"), meta.get("report")] if x) or source.upper()),
+                "text": _first_sentences(re.sub(r"\s+", " ", text or "").strip(), 600), "url": meta.get("url") or None}
+
+    def technique_page(self, technique_id: str, limit: int = 20) -> dict | None:
+        info = self.technique(technique_id)
+        if not info:
+            return None
+        tid = str(info["technique_id"])
+        parent = tid.split(".")[0]
+        items = {}
+        for source, collection in self.COLLECTIONS.items():
+            if self.vector is not None:
+                chunks = [self._item(source, c["id"], c["text"], c["metadata"]) for c in self.vector.items(collection, parent, limit)]
+            else:
+                chunks = [self._item(source, c.get("id", ""), c.get("text", ""), c.get("metadata", {}))
+                          for c in self.by_technique.get(source, {}).get(parent, [])[:limit]]
+            items[source] = chunks
+        description = re.sub(r"\(Citation:[^)]*\)", "", str(info.get("description", "")))
+        description = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", description).strip()   # ATT&CK markdown links -> text
+        subtechniques = [{"technique_id": t, "name": str(r.get("name", t))} for t, r in sorted(self.techniques.items())
+                         if str(r.get("is_subtechnique", "")).lower() == "true" and str(r.get("parent_id")) == tid]
+        return {"technique_id": tid, "name": str(info.get("name", tid)), "tactics": self.tactics_of(tid),
+                "platforms": [p for p in str(info.get("platforms", "")).split(", ") if p],
+                "description": description, "url": str(info.get("url") or "") or None,
+                "mitigations": self.mitigations_for(tid), "subtechniques": subtechniques,
+                "counts": self.chunk_counts(tid), "items": items}
+
     # ----- /metrics knowledge_base block -----
     def stats(self, techniques_of_interest: list[str]) -> dict:
         if self.vector is not None:

@@ -38,11 +38,12 @@ class Settings:
 
     # replay traffic: Sai's processed test edges, else the Oct 6 demo test split
     replay_file: Path | None = None
-    # primary model: "auto" | "graphsage" | "precomputed" | "heuristic"
+    # primary model: "auto" | "graphsage" | "hgt" | "precomputed" | "heuristic"
     primary_model: str = "auto"
     primary_model_name: str | None = None
     threshold: float | None = None
     model_checkpoint: Path | None = None
+    hgt_checkpoint: Path | None = None
     preprocessing_file: Path | None = None
     primary_predictions: Path | None = None   # e.g. the decision model (model_5) exported per edge
     model_outputs: Path | None = None         # Models 1-5 per edge, for the Research tab
@@ -103,6 +104,7 @@ class Settings:
             threshold=float(threshold) if threshold else None,
             model_checkpoint=path("MODEL_CHECKPOINT", data_dir / "graphsage_best_model.pt",
                                   data_dir / "graphsage_exp1_best_model.pt"),
+            hgt_checkpoint=path("HGT_CHECKPOINT", data_dir / "transformer_best_model.pt"),
             preprocessing_file=path("PREPROCESSING_FILE", data_dir / "preprocessing_objects.joblib"),
             primary_predictions=path("PRIMARY_PREDICTIONS", data_dir / "primary_predictions.parquet"),
             model_outputs=path("MODEL_OUTPUTS", data_dir / "model_outputs.jsonl"),

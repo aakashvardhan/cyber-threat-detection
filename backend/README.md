@@ -75,7 +75,7 @@ cd backend && pytest
 
 ## Model explanation (GNNExplainer)
 
-`GET /incidents/{id}/model-explanation` explains why GraphSAGE flagged the incident's top edge, adapted
+`GET /incidents/{id}/model-explanation` explains why the live graph model (GraphSAGE or HGT) flagged the incident's top edge, adapted
 from Sai's `gnn_explanation_inference.py`: GNNExplainer on the attack head (important neighbour links and
 node features), gradient saliency for the edge's own features, and a faithfulness check (the attack
 probability again with the top features set to the training mean). It runs in a background thread on the
@@ -86,3 +86,12 @@ rows by the detector, so edge i is row i of the window.
 |---|---|---|
 | `GNN_EXPLAINER` | `true` | Turn the endpoint off (`status: unavailable`) |
 | `GNN_EXPLAINER_EPOCHS` | `100` | GNNExplainer optimisation steps |
+
+## Live model, Evaluation and Knowledge base (v0.5.0)
+
+- `GET /models`, `POST /models/active {"model": "hgt"}`: the sidebar switches the live detector between GraphSAGE
+  and HGT (`transformer_best_model.pt` in `data/`, or `HGT_CHECKPOINT`). The replay restarts, since every incident
+  came from the previous model. The LLMs are listed but only run offline (Research tab).
+- `GET /metrics` feeds the Evaluation page (shared-sample and full-split tables, explanation layer, RAG ablations).
+- `GET /knowledge-base` and `GET /knowledge-base/{technique_id}` feed the Knowledge base page: every ATT&CK
+  technique with the procedure / CTI / CVE chunks the RAG pipeline can cite (from Chroma when vector retrieval is on).

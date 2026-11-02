@@ -1,4 +1,4 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.4).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.5.0).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 
 from app import schemas
 from app.config import DEMO_DATA, Settings
-from app.detectors import Detector, load_detector
+from app.detectors import GRAPH_DETECTORS, Detector, graph_checkpoint, load_detector, load_graph_detector
 from app.behavior import BehaviorSearch
 from app.explain import ExplanationManager
 from app.graph import window_graph
@@ -44,6 +44,7 @@ class AppState:
     metrics: dict
     primary_model: str
     edit_lock: threading.Lock
+    detectors: dict | None = None      # loaded graph models by id, for switching the live model
 
 
 def build_state(settings: Settings) -> AppState:
@@ -75,7 +76,58 @@ def build_state(settings: Settings) -> AppState:
         kb=kb, explanations=ExplanationManager(settings, kb, behavior=behavior, data=replay_data),
         model_explainer=ModelExplainer(detector, replay_data, settings.gnn_explainer_epochs, settings.gnn_explainer),
         model_outputs=ModelOutputs.load(settings.model_outputs, replay_data),
-        metrics=metrics, primary_model=primary, edit_lock=threading.Lock())
+        metrics=metrics, primary_model=primary, edit_lock=threading.Lock(),
+        detectors={detector.name: detector} if detector.name in GRAPH_DETECTORS else {})
+
+
+OFFLINE_MODELS = {"Mistral-7B multi-LoRA": "mistral", "Qwen2.5-7B QLoRA": "qwen"}
+
+
+def models_view(state: AppState) -> dict:
+    """The models the console can run live (graph models) and the ones scored offline (LLMs)."""
+    s = state.settings
+    models = []
+    for kind, cls in GRAPH_DETECTORS.items():
+        loaded = kind in (state.detectors or {})
+        ready = loaded or bool(graph_checkpoint(s, kind) and graph_checkpoint(s, kind).exists()
+                               and s.preprocessing_file and s.preprocessing_file.exists())
+        models.append({"id": kind, "name": cls.display_name, "live": True, "available": ready,
+                       "active": state.detector.name == kind,
+                       "note": None if ready else f"Checkpoint not found (set {'MODEL_CHECKPOINT' if kind == 'graphsage' else 'HGT_CHECKPOINT'})"})
+    if state.detector.name not in GRAPH_DETECTORS:
+        models.insert(0, {"id": state.detector.name, "name": state.primary_model, "live": True, "available": True,
+                          "active": True, "note": None})
+    names = {m.get("model") for m in state.metrics.get("models", [])}
+    for full, kind in OFFLINE_MODELS.items():
+        if full in names:
+            models.append({"id": kind, "name": full, "live": False, "available": False, "active": False,
+                           "note": "7B language model, scored offline on a 7,882-edge sample; see the Research tab"})
+    return {"active": state.detector.name, "models": models}
+
+
+def switch_model(state: AppState, kind: str) -> dict:
+    """Make another graph model the live detector. The replay restarts, since every incident came from the old one."""
+    if kind not in GRAPH_DETECTORS:
+        raise HTTPException(status_code=400, detail=f"{kind!r} cannot run live; choose one of {sorted(GRAPH_DETECTORS)}")
+    with state.edit_lock:
+        if state.detector.name != kind:
+            detector = (state.detectors or {}).get(kind)
+            if detector is None:
+                detector, error = load_graph_detector(state.settings, state.replay_data, kind)
+                if detector is None:
+                    raise HTTPException(status_code=409, detail=f"Cannot load {kind}: {error}")
+                if state.settings.threshold is not None:
+                    detector.threshold = state.settings.threshold
+                state.detectors[kind] = detector
+            old = state.model_explainer
+            state.detector = detector
+            state.controller = ReplayController(state.replay_data, detector, state.settings.incident_gap_minutes)
+            state.model_explainer = ModelExplainer(detector, state.replay_data, state.settings.gnn_explainer_epochs,
+                                                   state.settings.gnn_explainer)
+            old.pool.shutdown(wait=False, cancel_futures=True)
+            state.primary_model = detector.display_name
+            log.info("Live model switched to %s; replay restarted", detector.display_name)
+    return models_view(state)
 
 
 # ------------------------------------------------------------------ views
@@ -169,7 +221,7 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.4.4",
+    app = FastAPI(title="Threat Detection Console API", version="0.5.0",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["*"])
@@ -274,6 +326,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 entry["mitigations_applied"] = incident.mitigations_applied
             incident.activity.append(entry)
             return incident_summary(state, incident)
+
+    @app.get("/models", response_model=schemas.ModelList, tags=["Models"], dependencies=[Depends(require_key)],
+             responses={401: {"model": schemas.Error}})
+    def list_models(state: AppState = Depends(get_state)):
+        return models_view(state)
+
+    @app.post("/models/active", response_model=schemas.ModelList, tags=["Models"], dependencies=[Depends(require_key)],
+              responses={400: {"model": schemas.Error}, 401: {"model": schemas.Error}, 409: {"model": schemas.Error}})
+    def set_active_model(body: schemas.ModelSwitch, state: AppState = Depends(get_state)):
+        """Switch the live detector (GraphSAGE or HGT). The replay restarts from the first window."""
+        return switch_model(state, body.model)
+
+    @app.get("/knowledge-base", response_model=schemas.KnowledgeCatalog, tags=["Research"],
+             dependencies=[Depends(require_key)], responses={401: {"model": schemas.Error}})
+    def knowledge_catalog(state: AppState = Depends(get_state)):
+        """Every ATT&CK technique with the number of procedure / CTI / CVE chunks the RAG pipeline can cite."""
+        kb = state.kb
+        techniques = getattr(state.detector, "technique_classes", []) or []
+        return {"retrieval": f"vector ({kb.vector.model_name})" if kb.vector else "token overlap",
+                "sources": kb.stats(sorted(set(techniques)))["sources"],
+                "techniques": kb.catalog(techniques)}
+
+    @app.get("/knowledge-base/{technique_id}", response_model=schemas.KnowledgeTechnique, tags=["Research"],
+             dependencies=[Depends(require_key)], responses={401: {"model": schemas.Error}, 404: {"model": schemas.Error}})
+    def knowledge_technique(technique_id: str, limit: int = Query(default=20, ge=1, le=100),
+                            state: AppState = Depends(get_state)):
+        page = state.kb.technique_page(technique_id.upper(), limit)
+        if page is None:
+            raise HTTPException(status_code=404, detail=f"Unknown technique {technique_id}")
+        return page
 
     @app.get("/metrics", tags=["Research"], dependencies=[Depends(require_key)],
              responses={401: {"model": schemas.Error}})

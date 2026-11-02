@@ -1,4 +1,4 @@
-"""Why the GraphSAGE model flagged an edge (GNNExplainer), for the incident page.
+"""Why the graph model (GraphSAGE or HGT) flagged an edge (GNNExplainer), for the incident page.
 
 Adapted from Sai's gnn_explanation_inference.py (explain_task + edge_feature_faithfulness):
 - neighbour edges: GNNExplainer edge mask on the binary head (which links the 2-layer GraphSAGE relied on)
@@ -187,12 +187,13 @@ class ModelExplainer:
 
     @property
     def method(self) -> str:
-        return (f"GNNExplainer ({self.epochs} epochs) on the GraphSAGE attack head; "
+        name = getattr(self.detector, "display_name", "model")
+        return (f"GNNExplainer ({self.epochs} epochs) on the {name} attack head; "
                 "edge features by gradient saliency")
 
     def view(self, incident: Incident) -> dict:
         if not self.enabled:
-            return {"status": "unavailable", "message": "Only the GraphSAGE model can be explained this way."}
+            return {"status": "unavailable", "message": "Only the graph models (GraphSAGE, HGT) can be explained this way."}
         edge = max(incident.edges, key=lambda e: (e.attack_probability, -e.row))
         key = f"{edge.row}"
         with self.lock:
