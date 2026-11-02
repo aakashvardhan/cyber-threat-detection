@@ -343,7 +343,7 @@ function ImportanceList({ items, showValue }) {
     <ul className="imp-list">
       {items.map((f) => (
         <li key={f.feature}>
-          <span className="imp-label">{f.label}{showValue && f.value != null && <span className="mono muted"> {typeof f.value === 'number' ? num(f.value) : f.value}</span>}</span>
+          <span className="imp-label">{f.label}{showValue && f.value != null && !f.label.includes(`= ${f.value}`) && <span className="mono muted"> {typeof f.value === 'number' ? num(f.value) : f.value}</span>}</span>
           <span className="bar-track"><span className="bar-fill" style={{ width: `${Math.max(4, f.share * 100)}%`, background: 'var(--accent)' }} /></span>
         </li>
       ))}

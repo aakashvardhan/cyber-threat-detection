@@ -193,7 +193,7 @@ a.kpi:hover { background: var(--raised); text-decoration: none; }
 .sentence:hover { background: var(--raised); }
 .sentence.is-selected { background: var(--raised); border-color: var(--border-hover); }
 .cite { color: var(--accent); font-size: 12px; }
-.from-data { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; }
+.from-data { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
 .no-cite { font-size: 12px; color: var(--sev-medium); border: 1px dashed rgba(245, 177, 76, 0.6); border-radius: 4px; padding: 0 6px; }
 .generating { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--r-card); color: var(--muted); }
 .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; flex: none; }
