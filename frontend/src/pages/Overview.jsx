@@ -184,6 +184,7 @@ function TrafficPanel({ windows, clock }) {
       maxA: Math.max(1, ...present.map((x) => x.w.attack_edges)),
       avgN: Math.round(present.reduce((sum, x) => sum + x.w.events - x.w.attack_edges, 0) / Math.max(present.length, 1)),
       missing: slots.length - present.length,
+      anyFlagged: present.some((x) => x.w.attack_edges > 0),
     };
   }, [windows, clock]);
 
@@ -194,8 +195,8 @@ function TrafficPanel({ windows, clock }) {
   const lane = (value, max, color, height) => (
     <div className="bars" style={{ height }}>
       {t.runs.map((run) => (run.kind === 'gap'
-        ? <span key={run.slots[0].time} className="gap" style={{ flex: run.slots.length }} title={`No data ${label(run.slots[0].time)}–${label(run.slots[run.slots.length - 1].time + SLOT_MS)}`}>
-            {run.slots.length >= 8 && height > 60 && <em>no data</em>}
+        ? <span key={run.slots[0].time} className="gap" style={{ flex: run.slots.length }} title={`No traffic recorded ${label(run.slots[0].time)}–${label(run.slots[run.slots.length - 1].time + SLOT_MS)}`}>
+            {run.slots.length >= 8 && height > 60 && <em>no traffic recorded</em>}
           </span>
         : run.slots.map((x) => (
           <span key={x.time} className="bar" style={{ flex: 1, height: `${(value(x.w) / max) * 100}%`, background: typeof color === 'function' ? color(x.w) : color, opacity: hover && hover.time !== x.time ? 0.55 : 1 }}
@@ -211,7 +212,7 @@ function TrafficPanel({ windows, clock }) {
         {!t ? <p className="muted">No windows processed yet.</p> : (
           <>
             <div className="lane">
-              <span className="lane-head small"><span className="muted">Normal</span>{t.avgN > 0 && <span className="mono small muted">about {num(t.avgN)} edges per window</span>}</span>
+              <span className="lane-head small"><span className="muted">Normal</span>{t.avgN > 0 && <span className="mono small muted">about {num(t.avgN)} {t.avgN === 1 ? 'edge' : 'edges'} per window</span>}</span>
               {t.slots.some((x) => x.w && x.w.events > x.w.attack_edges)
                 ? lane((w) => w.events - w.attack_edges, t.maxN, 'var(--normal)', 56)
                 : <p className="small muted" style={{ margin: 0, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>No normal traffic in these windows: every edge was flagged.</p>}
@@ -222,9 +223,11 @@ function TrafficPanel({ windows, clock }) {
                   <span style={{ color: 'var(--sev-medium)' }}><i className="key" style={{ background: 'var(--sev-medium)' }} />Flagged as attack</span>
                   <span style={{ color: 'var(--sev-high)' }}><i className="key" style={{ background: 'var(--sev-high)' }} />of which p ≥ {URGENT_PROBABILITY.toFixed(2)}</span>
                 </span>
-                <span className="mono small muted">peak {num(t.maxA)} edges per window</span>
+                {t.anyFlagged && <span className="mono small muted">peak {num(t.maxA)} {t.maxA === 1 ? 'edge' : 'edges'} per window</span>}
               </span>
-              {lane((w) => w.attack_edges, t.maxA, flaggedFill, 84)}
+              {t.anyFlagged
+                ? lane((w) => w.attack_edges, t.maxA, flaggedFill, 84)
+                : <p className="small muted" style={{ margin: 0, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>No edges flagged in these 6 hours.</p>}
             </div>
             <div className="mono small muted" style={{ display: 'flex', justifyContent: 'space-between' }}>
               {[0, 24, 48, SLOTS - 1].map((i) => <span key={i}>{label(t.slots[i].time)}</span>)}

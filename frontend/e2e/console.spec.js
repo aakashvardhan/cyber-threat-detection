@@ -200,6 +200,11 @@ test('13. Evaluation compares the models from GET /metrics', async ({ page }) =>
   if (graph) await expect(page.locator('.eval-table').first()).toContainText(graph.model);
   await page.getByRole('button', { name: /Full test split/ }).click();
   await expect(page.locator('.eval-table').first()).not.toContainText('Mistral');
+  for (const name of ['Technique', 'RAG & explanation']) {
+    await page.getByRole('tab', { name }).click();
+    await expect(page.getByRole('heading', { name: 'Evaluation' })).toBeVisible();   // the page did not crash
+  }
+  await expect(page.getByText('Retrieval on the golden query set')).toBeVisible();
   await page.getByRole('tab', { name: 'RAG ablation' }).click();
   await expect(page.getByRole('heading', { name: 'RAG ablations' })).toBeVisible();
 });

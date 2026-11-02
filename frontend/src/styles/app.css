@@ -155,7 +155,7 @@ a.kpi:hover { background: var(--raised); text-decoration: none; }
 .thead.ov-cols { padding-top: 8px; padding-bottom: 8px; }
 .cell-stack { display: flex; flex-direction: column; min-width: 0; }
 .lane { display: flex; flex-direction: column; gap: 4px; }
-.lane-head { display: flex; justify-content: space-between; }
+.lane-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; }
 .lane-key { display: flex; gap: 14px; flex-wrap: wrap; }
 .lane-key .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
 .bars { display: flex; align-items: flex-end; gap: 1px; border-bottom: 1px solid var(--border); }

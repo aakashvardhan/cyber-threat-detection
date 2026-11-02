@@ -139,6 +139,16 @@ function download(m) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function Stat({ label, value, sub }) {
+  return (
+    <div className="kpi">
+      <span className="kpi-label">{label}</span>
+      <span className="kpi-value" style={{ fontSize: 24 }}>{value}</span>
+      {sub && <span className="kpi-sub muted">{sub}</span>}
+    </div>
+  );
+}
+
 function ExplanationLayer({ m }) {
   const r = m.retrieval || {};
   const e = m.explanation || {};
