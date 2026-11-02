@@ -54,6 +54,8 @@ class Settings:
     chroma_dir: Path | None = None
     attack_stix: Path | None = None           # enterprise-attack.json: technique documents + procedure examples
     behavior_check: bool = True
+    gnn_explainer: bool = True               # GNNExplainer for the GraphSAGE detector (incident page)
+    gnn_explainer_epochs: int = 100
 
     # explanations
     llm_provider: str = "none"                # "groq" | "local" | "none"
@@ -112,6 +114,8 @@ class Settings:
             attack_stix=path("ATTACK_STIX", data_dir / "knowledge" / "enterprise-attack.json",
                              DEMO_DATA / "rag" / "enterprise-attack.json"),
             behavior_check=_flag("BEHAVIOR_CHECK", True),
+            gnn_explainer=_flag("GNN_EXPLAINER", True),
+            gnn_explainer_epochs=int(_env("GNN_EXPLAINER_EPOCHS", "100")),
             llm_provider=provider,
             llm_base_url=base_url,
             llm_model=model,

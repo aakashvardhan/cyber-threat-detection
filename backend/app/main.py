@@ -1,4 +1,4 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.3).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.4.4).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
@@ -23,6 +23,7 @@ from app.incidents import Incident, ReplayController, ReplayError
 from app.knowledge import KnowledgeBase
 from app.replay_data import ReplayData
 from app.vector_store import VectorStore, procedures_from_stix
+from app.gnn_explain import ModelExplainer
 from app.research import ModelOutputs, load_metrics
 from app.timeutil import iso, now_iso
 
@@ -38,6 +39,7 @@ class AppState:
     controller: ReplayController
     kb: KnowledgeBase
     explanations: ExplanationManager
+    model_explainer: ModelExplainer
     model_outputs: ModelOutputs
     metrics: dict
     primary_model: str
@@ -71,6 +73,7 @@ def build_state(settings: Settings) -> AppState:
         settings=settings, replay_data=replay_data, detector=detector,
         controller=ReplayController(replay_data, detector, settings.incident_gap_minutes),
         kb=kb, explanations=ExplanationManager(settings, kb, behavior=behavior, data=replay_data),
+        model_explainer=ModelExplainer(detector, replay_data, settings.gnn_explainer_epochs, settings.gnn_explainer),
         model_outputs=ModelOutputs.load(settings.model_outputs, replay_data),
         metrics=metrics, primary_model=primary, edit_lock=threading.Lock())
 
@@ -166,7 +169,7 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.4.3",
+    app = FastAPI(title="Threat Detection Console API", version="0.4.4",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["*"])
@@ -240,6 +243,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if window is None or window not in windows:
             raise HTTPException(status_code=400, detail=f"{window_start} is not a window of {incident_id}")
         return window_graph(state.controller.state, incident, window, state.detector.threshold)
+
+    @app.get("/incidents/{incident_id}/model-explanation", response_model=schemas.ModelExplanation, tags=["Incidents"],
+             dependencies=[Depends(require_key)],
+             responses={401: {"model": schemas.Error}, 404: {"model": schemas.Error}})
+    def get_model_explanation(incident_id: str, state: AppState = Depends(get_state)):
+        """Why the model flagged the incident's top edge (GNNExplainer). Starts in the background on the
+        first call; poll until status is ready."""
+        return {"incident_id": incident_id, **state.model_explainer.view(find(state, incident_id))}
 
     @app.patch("/incidents/{incident_id}", response_model=schemas.IncidentSummary, tags=["Incidents"],
                dependencies=[Depends(require_key)],

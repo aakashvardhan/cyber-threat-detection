@@ -266,3 +266,51 @@ class WindowGraph(_Model):
     truncated: bool
     nodes: list[GraphNode]
     edges: list[GraphEdge]
+
+
+# ---------------------------------------------------------------- GNNExplainer (API 0.4.4)
+class ExplainedEdge(_Model):
+    event_id: str
+    window_start: str
+    source_ip: str
+    destination_ip: str
+    attack_probability: float
+
+
+class FeatureImportance(_Model):
+    NULLABLE = frozenset({"value"})
+    feature: str
+    label: str
+    importance: float
+    share: float                       # importance / the largest importance in the list (0-1)
+    value: float | int | str | None = None   # edge features only: the edge's own (unscaled) value
+
+
+class NeighborEdge(_Model):
+    source_ip: str
+    destination_ip: str
+    importance: float
+    share: float
+    is_explained_edge: bool
+
+
+class Faithfulness(_Model):
+    features_removed: list[str]
+    probability_before: float
+    probability_after: float
+    logit_drop: float
+
+
+class ModelExplanation(_Model):
+    incident_id: str
+    status: Literal["unavailable", "computing", "ready", "error"]
+    message: str | None = None
+    edge: ExplainedEdge | None = None
+    method: str | None = None
+    edge_features: list[FeatureImportance] | None = None
+    node_features: list[FeatureImportance] | None = None
+    neighbor_edges: list[NeighborEdge] | None = None
+    faithfulness: Faithfulness | None = None
+    seconds: float | None = None
+    started_at: str | None = None
+    computed_at: str | None = None

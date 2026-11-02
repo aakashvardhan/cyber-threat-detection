@@ -72,3 +72,17 @@ cd backend && pytest
 ```
 
 `tests/test_contract.py` checks every path, method and required field against `docs/api/openapi.yaml` when the spec is present (set `OPENAPI_SPEC` to point elsewhere).
+
+## Model explanation (GNNExplainer)
+
+`GET /incidents/{id}/model-explanation` explains why GraphSAGE flagged the incident's top edge, adapted
+from Sai's `gnn_explanation_inference.py`: GNNExplainer on the attack head (important neighbour links and
+node features), gradient saliency for the edge's own features, and a faithfulness check (the attack
+probability again with the top features set to the training mean). It runs in a background thread on the
+first request (about 0.3 s per edge on CPU) and is cached per incident. The graph is built from the window's
+rows by the detector, so edge i is row i of the window.
+
+| Variable | Default | |
+|---|---|---|
+| `GNN_EXPLAINER` | `true` | Turn the endpoint off (`status: unavailable`) |
+| `GNN_EXPLAINER_EPOCHS` | `100` | GNNExplainer optimisation steps |
