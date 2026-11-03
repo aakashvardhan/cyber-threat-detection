@@ -1,0 +1,17 @@
+{
+  "parsed_answers": 1.0,
+  "answers_with_invalid_labels": 0.1290281654402436,
+  "attack_pr_auc": 0.06922960602517739,
+  "attack_roc_auc": 0.43212524183420487,
+  "attack_recall": 0.0012345679012345679,
+  "attack_precision": 0.004986458204219683,
+  "false_alarm_rate": 0.022,
+  "tactics_exact_match": 0.0,
+  "tactics_first_correct": 0.0013879250520471894,
+  "tactics_micro_f1": 0.3023230210282946,
+  "tactics_macro_f1": 0.07040751687230659,
+  "techniques_exact_match": 0.00038211692777990065,
+  "techniques_first_correct": 0.00038211692777990065,
+  "techniques_micro_f1": 0.00036832412523020257,
+  "techniques_macro_f1": 4.774637127578304e-05
+}
