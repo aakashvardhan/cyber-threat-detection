@@ -1,0 +1,2 @@
+qid,positive_decisions,negative_decisions,total,has_positive_training_examples
+detection,5000,5000,10000,True

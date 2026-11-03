@@ -1,0 +1,7 @@
+[
+  {
+    "qid": "detection",
+    "task": "binary",
+    "label": "attack"
+  }
+]

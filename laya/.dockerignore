@@ -1,0 +1,3 @@
+# Only requirements.txt is needed at build time; data is mounted at runtime
+*
+!requirements.txt

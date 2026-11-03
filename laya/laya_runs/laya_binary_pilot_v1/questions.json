@@ -1,0 +1,10 @@
+{
+  "detection": {
+    "type": "choice",
+    "instructions": "Classify this five-minute source-to-destination communication using the traffic evidence.",
+    "criteria": {
+      "A": "Benign communication.",
+      "B": "Attack-related communication."
+    }
+  }
+}

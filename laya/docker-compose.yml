@@ -1,0 +1,38 @@
+services:
+  jupyter:
+    build: .
+    image: aakash-jupyter:latest
+    container_name: aakash-jupyter
+    # Come back automatically when the Docker engine restarts (e.g. after Windows updates WSL)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/api', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    ports:
+      # Bound to localhost only, so Jupyter is not reachable from other machines on the network
+      - "127.0.0.1:8888:8888"
+    environment:
+      # Login token for http://localhost:8888 — change it, or override with JUPYTER_TOKEN in a .env file
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-aakash}
+    volumes:
+      # Project folder (notebooks, processed_edges/, *.pt, *.joblib); relative paths in the notebooks resolve here
+      - ./:/workspace
+      # Persist the downloaded Laya model between container restarts
+      - hf-cache:/root/.cache/huggingface
+      # Keep Jupyter's cookie secret across container re-creation, so the browser stays logged in
+      - jupyter-runtime:/root/.local/share/jupyter
+    shm_size: "8gb"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:
+  jupyter-runtime:
