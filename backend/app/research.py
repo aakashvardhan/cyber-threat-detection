@@ -46,7 +46,8 @@ class ModelOutputs:
         for model in sorted(grouped):
             rows = grouped[model]
             probabilities = [r["attack_probability"] for r in rows if r.get("attack_probability") is not None]
-            techniques = Counter(r["technique_id"] for r in rows if r.get("technique_id"))
+            # an LLM row can name several techniques ("techniques"); count each one, not just the first listed
+            techniques = Counter(t for r in rows for t in (r.get("techniques") or ([r["technique_id"]] if r.get("technique_id") else [])))
             confidences = [r["confidence"] for r in rows if r.get("confidence") is not None]
             grounded = [r["groundedness"] for r in rows if r.get("groundedness") is not None]
             text = next((r["explanation_text"] for r in rows if r.get("explanation_text")), None)

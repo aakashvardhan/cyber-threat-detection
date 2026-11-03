@@ -29,7 +29,9 @@ def test_every_spec_operation_is_implemented(spec, make_settings):
 @pytest.mark.parametrize("name", ["DetectResponse", "ReplayState", "WindowStats", "EdgePreview", "IncidentSummary",
                                   "IncidentList", "MitreCandidate", "TacticPrediction", "Edge", "Evidence",
                                   "Sentence", "Explanation", "RetrievalSource", "RetrievalTrace", "Mitigation",
-                                  "ModelOutput", "ActivityEntry", "IncidentUpdate", "DetectRequest", "Error"])
+                                  "ModelOutput", "ActivityEntry", "IncidentUpdate", "DetectRequest", "Error",
+                                  "ModelInfo", "ModelList", "ModelSwitch", "KnowledgeEntry", "KnowledgeCatalog",
+                                  "KnowledgeItem", "KnowledgeTechnique"])
 def test_schema_fields_match(spec, name):
     schema = spec["components"]["schemas"][name]
     model = getattr(schemas, name)

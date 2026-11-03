@@ -62,7 +62,7 @@ def make_knowledge(directory: Path) -> None:
     pd.DataFrame([
         dict(technique_id="T1190", name="Exploit Public-Facing Application", is_subtechnique=False, parent_id="T1190",
              tactic_ids="TA0001", tactics="Initial Access", platforms="Linux",
-             description="Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network.(Citation: X)",
+             description="Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network, for example through [Valid Accounts](https://attack.mitre.org/techniques/T1078).(Citation: X)",
              detection="", url="https://attack.mitre.org/techniques/T1190", mitigations=""),
         dict(technique_id="T1595", name="Active Scanning", is_subtechnique=False, parent_id="T1595", tactic_ids="TA0043",
              tactics="Reconnaissance", platforms="PRE", description="Adversaries may execute active reconnaissance scans.",

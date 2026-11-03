@@ -54,6 +54,9 @@ class ReplayData:
         self.source = source
         self.windows: list[pd.Timestamp] = list(pd.Index(frame["window_start"].unique()).sort_values())
         self.window_position = {w: i for i, w in enumerate(self.windows)}
+        # first recorded window of each UTC day: the test split has gaps, so a day may not start at 00:00
+        self.day_starts: list[pd.Timestamp] = list(pd.Series(self.windows).groupby(
+            pd.Series(self.windows).dt.normalize()).min()) if self.windows else []
         self._rows = frame.groupby("window_start").indices
 
     @classmethod

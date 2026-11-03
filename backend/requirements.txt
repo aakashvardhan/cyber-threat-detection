@@ -11,6 +11,11 @@ scikit-learn>=1.3
 torch>=2.0
 torch-geometric>=2.5
 
+# RAG: vector retrieval and behaviour check (optional; without them the backend uses token overlap)
+chromadb>=1.5
+sentence-transformers>=3.0
+nltk>=3.8
+
 # tests
 pytest>=8.0
 httpx>=0.27

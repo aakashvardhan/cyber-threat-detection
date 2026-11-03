@@ -94,6 +94,9 @@ class Incident:
         return max(ranked, key=SEVERITY_RANK.get) if ranked else None
 
 
+HIGH_CONFIDENCE = 0.80   # attack probability for "high-confidence" (the console's urgent level)
+
+
 @dataclass
 class WindowResult:
     window_start: pd.Timestamp
@@ -101,6 +104,8 @@ class WindowResult:
     attack_edges: int
     new_incident_ids: list[str]
     updated_incident_ids: list[str]
+    probabilities: np.ndarray | None = None      # per edge, in data.rows(window) order (for the graph view)
+    high_confidence_edges: int = 0                # flagged edges with probability >= HIGH_CONFIDENCE
 
 
 class ReplayState:
@@ -169,8 +174,10 @@ class ReplayState:
                 self.open_by_key[key] = incident.incident_id
                 new_ids.append(incident.incident_id)
 
-        attack_edges = int((np.asarray(prediction.attack_probability) >= threshold).sum())
-        result = WindowResult(window, len(rows), attack_edges, new_ids, updated_ids)
+        probs = np.asarray(prediction.attack_probability, dtype=float)
+        attack_edges = int((probs >= threshold).sum())
+        high = int((probs >= max(threshold, HIGH_CONFIDENCE)).sum())   # a subset of the flagged edges
+        result = WindowResult(window, len(rows), attack_edges, new_ids, updated_ids, probs, high)
         self.results[window] = result
         self.order.append(window)
         return result

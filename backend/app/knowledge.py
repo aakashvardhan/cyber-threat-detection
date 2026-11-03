@@ -2,8 +2,8 @@
 
 Reads the processed ATT&CK files used by the Oct 6 demo (mitre_lookup.csv,
 mitre_mitigations.csv, procedure_chunks.jsonl) plus optional cti_chunks.jsonl and
-cve_chunks.jsonl. Scoring is the demo's token-overlap score; a Chroma/embedding
-retriever can replace `_score` later without changing the API.
+cve_chunks.jsonl. When the vector store is available (app/vector_store.py) evidence comes
+from the RAG notebook's vector retrieval; otherwise from the demo's token-overlap score.
 """
 from __future__ import annotations
 
@@ -42,6 +42,9 @@ def _first_sentences(text: str, limit: int = 400) -> str:
 def _read_jsonl(path: Path) -> list[dict]:
     if not path.exists():
         return []
+    with path.open("rb") as handle:
+        if handle.read(40).startswith(b"version https://git-lfs"):   # Git LFS pointer, file not pulled
+            return []
     with path.open(encoding="utf-8") as handle:
         return [json.loads(line) for line in handle if line.strip()]
 
@@ -61,6 +64,7 @@ class KnowledgeBase:
     chunks: dict[str, list[dict]] = field(default_factory=dict)   # source -> chunks
     by_technique: dict[str, dict[str, list[dict]]] = field(default_factory=dict)
     directory: str | None = None
+    vector: object | None = None      # VectorStore, set by build_state when vector retrieval is on
 
     @classmethod
     def load(cls, directory: Path | None) -> "KnowledgeBase":
@@ -81,18 +85,21 @@ class KnowledgeBase:
                                             .rename(columns={"mitigation_name": "name"}).to_dict("records"))
         for source, filename in [("procedure", "procedure_chunks.jsonl"), ("cti", "cti_chunks.jsonl"),
                                  ("cve", "cve_chunks.jsonl")]:
-            kb.chunks[source] = _read_jsonl(directory / filename)
-            index: dict[str, list[dict]] = {}
-            for chunk in kb.chunks[source]:
-                meta = chunk.get("metadata", {})
-                ids = meta.get("technique_ids") or []
-                ids = [ids] if isinstance(ids, str) else list(ids)
-                if meta.get("technique_id"):
-                    ids.append(meta["technique_id"])
-                for tid in {str(t).split(".")[0] for t in ids}:
-                    index.setdefault(tid, []).append(chunk)
-            kb.by_technique[source] = index
+            kb.add_chunks(source, _read_jsonl(directory / filename))
         return kb
+
+    def add_chunks(self, source: str, chunks: list[dict]) -> None:
+        self.chunks[source] = chunks
+        index: dict[str, list[dict]] = {}
+        for chunk in chunks:
+            meta = chunk.get("metadata", {})
+            ids = meta.get("technique_ids") or []
+            ids = [ids] if isinstance(ids, str) else list(ids)
+            if meta.get("technique_id"):
+                ids.append(meta["technique_id"])
+            for tid in {str(t).split(".")[0] for t in ids}:
+                index.setdefault(tid, []).append(chunk)
+        self.by_technique[source] = index
 
     # ----- lookups -----
     def technique(self, technique_id: str | None) -> dict | None:
@@ -120,7 +127,9 @@ class KnowledgeBase:
 
     # ----- retrieval -----
     def retrieve(self, technique_id: str | None, tactic: str | None, query: str,
-                 top_k: int = 5, min_score: float = 0.05) -> Retrieval:
+                 top_k: int = 5, min_score: float = 0.05, event: dict | None = None) -> Retrieval:
+        if self.vector is not None and event is not None:
+            return self._retrieve_vector(technique_id, tactic, event, top_k, min_score)
         started = time.perf_counter()
         q = _tokens(query)
         evidence: list[dict] = []
@@ -190,8 +199,103 @@ class KnowledgeBase:
                  "fallback_to_tactic": fallback, "latency_ms": int((time.perf_counter() - started) * 1000)}
         return Retrieval(evidence, trace, "applicable" if cve_applicable else "not_applicable", fallback)
 
+    def _mitre_evidence(self, technique_id: str | None) -> list[dict]:
+        info = self.technique(technique_id)
+        if not info:
+            return []
+        return [{"source": "mitre", "level": "technique", "ref": str(info["technique_id"]), "title": str(info["name"]),
+                 "text": _first_sentences(str(info.get("description", ""))), "score": 1.0, "url": str(info.get("url")) or None}]
+
+    def _retrieve_vector(self, technique_id: str | None, tactic: str | None, event: dict, top_k: int,
+                         min_score: float = 0.05) -> Retrieval:
+        """RAG notebook flow (vector search with technique filter and fallbacks)."""
+        started = time.perf_counter()
+        parent = technique_id.split(".")[0] if technique_id else None
+        siblings = [t for t in self.techniques_in_tactic(tactic) if t != parent] if tactic else []
+        result = self.vector.retrieve({**event, "technique_id": technique_id,
+                                       "technique_name": self.technique_name(technique_id)}, siblings, k_cti=top_k,
+                                      min_score=min_score)
+        evidence = self._mitre_evidence(technique_id) + result["evidence"]
+        for i, item in enumerate(evidence, start=1):
+            item["evidence_id"] = f"E{i}"
+        sources = [{"source": "mitre", "returned": 1 if self.technique(technique_id) else 0}] + result["sources"]
+        cve_applicable = any(s["source"] == "cve" and not s.get("skipped") for s in sources)
+        trace = {"query": result["query"], "sources": sources, "top_k": top_k, "min_score": min_score,
+                 "fallback_to_tactic": result["fallback_to_tactic"],
+                 "latency_ms": int((time.perf_counter() - started) * 1000)}
+        return Retrieval(evidence, trace, "applicable" if cve_applicable else "not_applicable", result["fallback_to_tactic"])
+
+    # ----- browsing (GET /knowledge-base) -----
+    COLLECTIONS = {"procedure": "procedures", "cti": "cti", "cve": "cve"}
+
+    def chunk_counts(self, technique_id: str) -> dict[str, int]:
+        parent = technique_id.split(".")[0]
+        if self.vector is not None:
+            return {s: int(self.vector.counts.get(c, {}).get(parent, 0)) for s, c in self.COLLECTIONS.items()}
+        return {s: len(self.by_technique.get(s, {}).get(parent, [])) for s in self.COLLECTIONS}
+
+    def catalog(self, detector_techniques: list[str]) -> list[dict]:
+        """Every ATT&CK technique (parents), with how much the RAG pipeline can cite for it."""
+        detector = {t.split(".")[0] for t in detector_techniques}
+        subs: dict[str, int] = {}
+        for tid, row in self.techniques.items():
+            if str(row.get("is_subtechnique", "")).lower() == "true":
+                subs[str(row.get("parent_id") or tid.split(".")[0])] = subs.get(str(row.get("parent_id") or tid.split(".")[0]), 0) + 1
+        out = []
+        for tid, row in sorted(self.techniques.items()):
+            if str(row.get("is_subtechnique", "")).lower() == "true":
+                continue
+            out.append({"technique_id": tid, "name": str(row.get("name", tid)), "tactics": self.tactics_of(tid),
+                        **self.chunk_counts(tid), "mitigations": len(self.mitigations_for(tid)),
+                        "subtechniques": subs.get(tid, 0), "detector_class": tid in detector})
+        return out
+
+    @staticmethod
+    def _item(source: str, chunk_id: str, text: str, meta: dict) -> dict:
+        return {"source": source, "id": chunk_id,
+                "ref": meta.get("source_attack_id") or meta.get("cve_id") or meta.get("report") or chunk_id,
+                "title": (meta.get("cve_id") or meta.get("source_name")
+                          or " ".join(x for x in [meta.get("apt_group"), meta.get("report")] if x) or source.upper()),
+                "text": _first_sentences(re.sub(r"\s+", " ", text or "").strip(), 600), "url": meta.get("url") or None}
+
+    def technique_page(self, technique_id: str, limit: int = 20) -> dict | None:
+        info = self.technique(technique_id)
+        if not info:
+            return None
+        tid = str(info["technique_id"])
+        parent = tid.split(".")[0]
+        items = {}
+        for source, collection in self.COLLECTIONS.items():
+            if self.vector is not None:
+                chunks = [self._item(source, c["id"], c["text"], c["metadata"]) for c in self.vector.items(collection, parent, limit)]
+            else:
+                chunks = [self._item(source, c.get("id", ""), c.get("text", ""), c.get("metadata", {}))
+                          for c in self.by_technique.get(source, {}).get(parent, [])[:limit]]
+            items[source] = chunks
+        description = re.sub(r"\(Citation:[^)]*\)", "", str(info.get("description", "")))
+        description = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", description).strip()   # ATT&CK markdown links -> text
+        subtechniques = [{"technique_id": t, "name": str(r.get("name", t))} for t, r in sorted(self.techniques.items())
+                         if str(r.get("is_subtechnique", "")).lower() == "true" and str(r.get("parent_id")) == tid]
+        return {"technique_id": tid, "name": str(info.get("name", tid)), "tactics": self.tactics_of(tid),
+                "platforms": [p for p in str(info.get("platforms", "")).split(", ") if p],
+                "description": description, "url": str(info.get("url") or "") or None,
+                "mitigations": self.mitigations_for(tid), "subtechniques": subtechniques,
+                "counts": self.chunk_counts(tid), "items": items}
+
     # ----- /metrics knowledge_base block -----
     def stats(self, techniques_of_interest: list[str]) -> dict:
+        if self.vector is not None:
+            counts = self.vector.counts
+            sources = [{"source": "mitre", "items": len(self.techniques), "chunks": len(self.techniques),
+                        "techniques_linked": len(self.techniques)}]
+            for source, col in (("procedure", "procedures"), ("cti", "cti"), ("cve", "cve")):
+                n = self.vector.cols[col].count() if col in self.vector.cols else 0
+                sources.append({"source": source, "items": n, "chunks": n, "techniques_linked": len(counts.get(col, {}))})
+            coverage = []
+            for tid in techniques_of_interest:
+                n = sum(counts.get(c, {}).get(tid.split(".")[0], 0) for c in ("procedures", "cti"))
+                coverage.append({"technique_id": tid, "technique_level_chunks": n, "tactic_only": n == 0})
+            return {"embedding_model": self.vector.model_name, "sources": sources, "coverage": coverage}
         sources = [{"source": "mitre", "items": len(self.techniques), "chunks": len(self.techniques),
                     "techniques_linked": len(self.techniques)}]
         for source in ("procedure", "cti", "cve"):

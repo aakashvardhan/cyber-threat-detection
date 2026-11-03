@@ -1,6 +1,6 @@
 # Backend: Threat Detection Console API
 
-FastAPI implementation of the API contract in `docs/api/openapi.yaml` (v0.4.1, SJSU-113) for the analyst console.
+FastAPI implementation of the API contract in `docs/api/openapi.yaml` (v0.4.2, SJSU-113) for the analyst console.
 
 ## Run
 
@@ -36,11 +36,27 @@ The backend runs today with what is in the repo and switches to the real artifac
 | Replay traffic | Oct 6 demo test split | Sai's `test_edges.parquet` |
 | Primary model | Label-free heuristic, shown as `heuristic-fallback` | Sai's GraphSAGE (`graphsage_best_model.pt` + `preprocessing_objects.joblib`), or any model's per-edge predictions (`primary_predictions.parquet`, e.g. the decision model with severity) |
 | Explanations | Evidence-only sentences with citations (`mode: fallback`) | Groq (`LLM_PROVIDER=groq`) or the fine-tuned LLM behind an OpenAI-compatible server (`LLM_PROVIDER=local`) |
-| Knowledge base | Oct 6 demo ATT&CK files (697 techniques, 17k procedure chunks) | `data/knowledge/` with CTI and CVE chunks |
+| Knowledge base | ATT&CK lookup + procedure examples (built from `enterprise-attack.json` if `procedure_chunks.jsonl` is an LFS pointer) | `data/knowledge/` with `cti_chunks.jsonl` and `cve_chunks.jsonl` from the RAG notebook (shared drive, `RAG Corpus/processed`) |
+| Retrieval | Token overlap | Vector search from the RAG notebook (Chroma + all-MiniLM-L6-v2), on automatically when `chromadb` and `sentence-transformers` are installed |
 | Research tab (Models 1-5) | Primary model only | `model_outputs.jsonl` |
 | Metrics | `app/data/metrics.default.json` (verified numbers only) | `data/metrics.json` |
 
 `GET /health` (no key) reports which detector, replay file and LLM provider are active.
+
+## Retrieval (RAG)
+
+Follows `notebooks/RAG/rag.ipynb`. For each incident, on the first `GET /incidents/{id}`:
+
+1. **Evidence for the detector's technique**: MITRE entry, then CTI-HAL chunks of that technique, then ATT&CK procedure examples of that technique, then CTI chunks of other techniques in the same tactic (`level` = technique / procedure / tactic). CVEs only for exploit-type techniques (T1190, T1210, ...), filtered by the service keyword (HTTP, SSH, ...).
+2. **Behaviour check** (`retrieval_trace.behavior_check`): the incident's traffic is described in numbers (`facts`), turned into a short analyst reading (`reading`, e.g. "repeated login attempts against ssh authentication"), and searched over **all** ATT&CK techniques without the detector's technique as a filter (BM25 over technique descriptions and network detection analytics, fused with vector search when available). `agrees_with_detector` is false when the detector's technique is not in the top 3; the explanation then names the alternative. This is how a technique the detector never learned can still surface: in leave-one-recording-out tests, Brute Force (absent from training when ZeekData24 is held out) came first for 95% of those incidents with the reading, and was never found with the facts alone.
+
+| Setting | Default | |
+|---|---|---|
+| `RAG_MODE` | `auto` | `vector` (fail if unavailable), `token` (old token overlap) |
+| `EMBED_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Hugging Face name or a local folder |
+| `CHROMA_DIR` | `data/chroma_db` | The index is built on first start (about 10 minutes on a laptop CPU with CVE + procedures) and reused; a collection is rebuilt when its source file changes |
+| `ATTACK_STIX` | `data/knowledge/enterprise-attack.json`, else the Oct 6 demo copy | Technique documents for the behaviour check; procedure examples |
+| `BEHAVIOR_CHECK` | `true` | |
 
 ## Notes
 
@@ -56,3 +72,26 @@ cd backend && pytest
 ```
 
 `tests/test_contract.py` checks every path, method and required field against `docs/api/openapi.yaml` when the spec is present (set `OPENAPI_SPEC` to point elsewhere).
+
+## Model explanation (GNNExplainer)
+
+`GET /incidents/{id}/model-explanation` explains why the live graph model (GraphSAGE or HGT) flagged the incident's top edge, adapted
+from Sai's `gnn_explanation_inference.py`: GNNExplainer on the attack head (important neighbour links and
+node features), gradient saliency for the edge's own features, and a faithfulness check (the attack
+probability again with the top features set to the training mean). It runs in a background thread on the
+first request (about 0.3 s per edge on CPU) and is cached per incident. The graph is built from the window's
+rows by the detector, so edge i is row i of the window.
+
+| Variable | Default | |
+|---|---|---|
+| `GNN_EXPLAINER` | `true` | Turn the endpoint off (`status: unavailable`) |
+| `GNN_EXPLAINER_EPOCHS` | `100` | GNNExplainer optimisation steps |
+
+## Live model, Evaluation and Knowledge base (v0.5.0)
+
+- `GET /models`, `POST /models/active {"model": "hgt"}`: the sidebar switches the live detector between GraphSAGE
+  and HGT (`transformer_best_model.pt` in `data/`, or `HGT_CHECKPOINT`). The replay restarts, since every incident
+  came from the previous model. The LLMs are listed but only run offline (Research tab).
+- `GET /metrics` feeds the Evaluation page (shared-sample and full-split tables, explanation layer, RAG ablations).
+- `GET /knowledge-base` and `GET /knowledge-base/{technique_id}` feed the Knowledge base page: every ATT&CK
+  technique with the procedure / CTI / CVE chunks the RAG pipeline can cite (from Chroma when vector retrieval is on).

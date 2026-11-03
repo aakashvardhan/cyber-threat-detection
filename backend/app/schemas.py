@@ -1,4 +1,4 @@
-"""Request and response models from docs/api/openapi.yaml (v0.4.1)."""
+"""Request and response models from docs/api/openapi.yaml (v0.4.2)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -48,12 +48,16 @@ class ReplayState(_Model):
     window_start: str | None
     window_index: int
     window_count: int
+    first_window_start: str | None = None
+    last_window_start: str | None = None
+    day_starts: list[str] | None = None
 
 
 class WindowStats(_Model):
     window_start: str
     events: int
     attack_edges: int
+    high_confidence_edges: int | None = None   # flagged edges with attack probability >= 0.80
 
 
 class EdgePreview(_Model):
@@ -153,6 +157,22 @@ class RetrievalSource(_Model):
     skipped: bool | None = None
 
 
+class BehaviorCandidate(_Model):
+    technique_id: str
+    name: str
+    rank: int
+
+
+class BehaviorCheck(_Model):
+    """ATT&CK techniques the traffic pattern matches, searched without the detector's technique."""
+    NULLABLE = frozenset({"agrees_with_detector"})
+    facts: str
+    reading: list[str]
+    method: str
+    candidates: list[BehaviorCandidate]
+    agrees_with_detector: bool | None = None
+
+
 class RetrievalTrace(_Model):
     query: str
     sources: list[RetrievalSource]
@@ -160,6 +180,7 @@ class RetrievalTrace(_Model):
     min_score: float | None = None
     fallback_to_tactic: bool | None = None
     latency_ms: int | None = None
+    behavior_check: BehaviorCheck | None = None
 
 
 class Mitigation(_Model):
@@ -209,3 +230,164 @@ class IncidentUpdate(_Model):
     technique_override: str | None = None
     note: str | None = None
     mitigations_applied: list[str] | None = None
+
+
+class GraphNode(_Model):
+    ip: str
+    role: Literal["source", "target", "second_hop", "other"]
+    internal: bool
+
+
+class GraphEdge(_Model):
+    NULLABLE = frozenset({"attack_probability", "service", "port", "connection_state"})
+    source_ip: str
+    destination_ip: str
+    attack_probability: float | None = None
+    flagged: bool
+    connection_count: int
+    service: str | None = None
+    port: int | None = None
+    connection_state: str | None = None
+    outcome: Literal["no_reply", "refused", "completed", "unknown"]
+    orig_bytes: float
+    resp_bytes: float
+    orig_packets: int
+    resp_packets: int
+    in_two_hop: bool
+
+
+class WindowGraph(_Model):
+    incident_id: str
+    window_start: str
+    windows: list[str]
+    threshold: float
+    source_ip: str
+    window_edge_count: int
+    truncated: bool
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+# ---------------------------------------------------------------- GNNExplainer (API 0.4.4)
+class ExplainedEdge(_Model):
+    event_id: str
+    window_start: str
+    source_ip: str
+    destination_ip: str
+    attack_probability: float
+
+
+class FeatureImportance(_Model):
+    NULLABLE = frozenset({"value"})
+    feature: str
+    label: str
+    importance: float
+    share: float                       # importance / the largest importance in the list (0-1)
+    value: float | int | str | None = None   # edge features only: the edge's own (unscaled) value
+
+
+class NeighborEdge(_Model):
+    source_ip: str
+    destination_ip: str
+    importance: float
+    share: float
+    is_explained_edge: bool
+
+
+class Faithfulness(_Model):
+    features_removed: list[str]
+    probability_before: float
+    probability_after: float
+    logit_drop: float
+
+
+class ModelExplanation(_Model):
+    incident_id: str
+    status: Literal["unavailable", "computing", "ready", "error"]
+    message: str | None = None
+    edge: ExplainedEdge | None = None
+    method: str | None = None
+    edge_features: list[FeatureImportance] | None = None
+    node_features: list[FeatureImportance] | None = None
+    neighbor_edges: list[NeighborEdge] | None = None
+    faithfulness: Faithfulness | None = None
+    seconds: float | None = None
+    started_at: str | None = None
+    computed_at: str | None = None
+
+
+class ModelInfo(_Model):
+    id: str
+    name: str
+    live: bool
+    available: bool
+    active: bool
+    note: str | None = None
+
+
+class ModelList(_Model):
+    active: str
+    models: list[ModelInfo]
+
+
+class ModelSwitch(_Model):
+    model: str
+
+
+class KnowledgeSource(_Model):
+    source: str
+    items: int
+    chunks: int
+    techniques_linked: int
+
+
+class KnowledgeEntry(_Model):
+    technique_id: str
+    name: str
+    tactics: list[str]
+    procedure: int
+    cti: int
+    cve: int
+    mitigations: int
+    subtechniques: int
+    detector_class: bool
+
+
+class KnowledgeCatalog(_Model):
+    retrieval: str
+    sources: list[KnowledgeSource]
+    techniques: list[KnowledgeEntry]
+
+
+class KnowledgeItem(_Model):
+    NULLABLE = frozenset({"url"})
+    source: str
+    id: str
+    ref: str
+    title: str
+    text: str
+    url: str | None = None
+
+
+class KnowledgeMitigation(_Model):
+    mitigation_id: str
+    name: str
+
+
+class SubTechnique(_Model):
+    technique_id: str
+    name: str
+
+
+class KnowledgeTechnique(_Model):
+    NULLABLE = frozenset({"url"})
+    technique_id: str
+    name: str
+    tactics: list[str]
+    platforms: list[str]
+    description: str
+    url: str | None = None
+    mitigations: list[KnowledgeMitigation]
+    subtechniques: list[SubTechnique]
+    counts: dict[str, int]
+    items: dict[str, list[KnowledgeItem]]
