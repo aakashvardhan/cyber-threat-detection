@@ -1,0 +1,3 @@
+*.pt
+laya_runs/*/best_checkpoint/
+laya_runs/*/finetuned_checkpoint/

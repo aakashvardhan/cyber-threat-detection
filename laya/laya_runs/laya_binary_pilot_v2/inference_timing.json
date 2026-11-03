@@ -1,0 +1,15 @@
+{
+  "baseline": {
+    "seconds": 15.83603206799944,
+    "seconds_per_edge": 0.00791801603399972,
+    "decisions_per_edge": 1,
+    "rows": 2000
+  },
+  "finetuned": {
+    "seconds": 15.395528485000796,
+    "seconds_per_edge": 0.0076977642425003975,
+    "decisions_per_edge": 1,
+    "rows": 2000
+  },
+  "note": "Batched fp32 notebook pipeline including text encoding; excludes model loading. Not a production latency benchmark."
+}

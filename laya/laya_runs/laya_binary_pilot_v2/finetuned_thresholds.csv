@@ -1,0 +1,2 @@
+qid,positives,negatives,threshold,tuned
+detection,164,1836,0.9899132251739502,True

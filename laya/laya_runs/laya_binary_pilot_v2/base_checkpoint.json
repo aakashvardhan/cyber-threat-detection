@@ -1,0 +1,6 @@
+{
+  "model_id": "convaiinnovations/laya",
+  "requested_revision": "main",
+  "resolved_commit": "7b928d828b7b0e022f929d9bd2e44165aa270148",
+  "local_snapshot": "/root/.cache/huggingface/hub/models--convaiinnovations--laya/snapshots/7b928d828b7b0e022f929d9bd2e44165aa270148"
+}

@@ -1,0 +1,2 @@
+qid,task,label,evaluated_rows,positive_support,predicted_positive,precision,recall,f1,pr_auc_ap
+detection,binary,attack,2000,164,170,0.9647058823529412,1.0,0.9820359281437125,0.9967642022616443

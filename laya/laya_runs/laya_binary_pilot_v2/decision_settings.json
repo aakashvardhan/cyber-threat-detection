@@ -1,0 +1,15 @@
+{
+  "question_ids": [
+    "detection"
+  ],
+  "base_temperature": 1.9063563346862793,
+  "fine_temperature": 1.207294839739308,
+  "baseline_thresholds": [
+    0.5803886651992798
+  ],
+  "finetuned_thresholds": [
+    0.9899132251739502
+  ],
+  "calibration_source": "validation calibration windows only",
+  "selected_epoch": 4
+}
