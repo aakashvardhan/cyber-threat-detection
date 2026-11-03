@@ -595,6 +595,7 @@ const MODELS = [
   { key: 'HGT', name: 'HGT', input: 'graph', full: 'Hierarchical Graph Transformer' },
   { key: 'Mistral-7B multi-LoRA', name: 'Mistral (LoRA)', input: 'text', full: 'Mistral-7B, three LoRA adapters' },
   { key: 'Qwen2.5-7B QLoRA', name: 'Qwen (QLoRA)', input: 'text', full: 'Qwen2.5-7B, 4-bit QLoRA' },
+  { key: 'Laya', name: 'Laya', input: 'text', full: 'Laya multi-question classifier', pending: 'Not loaded yet: per-edge predictions for Laya are pending.' },
 ];
 const RAG = 'RAG';
 
@@ -634,7 +635,7 @@ function Research({ inc, primary: primaryName }) {
                   <div key={def.key} className="model-cols trow is-missing">
                     <span className="model-name" title={def.full}>{def.name}</span>
                     <span className="small muted" style={{ gridColumn: '2 / -1' }}>
-                      {def.input === 'text' ? 'Not evaluated: none of these edges are in the sample this model was scored on.' : 'No outputs loaded for this model.'}
+                      {def.pending ?? (def.input === 'text' ? 'Not evaluated: none of these edges are in the sample this model was scored on.' : 'No outputs loaded for this model.')}
                     </span>
                   </div>
                 );
@@ -656,7 +657,7 @@ function Research({ inc, primary: primaryName }) {
         </div>
         <details className="small muted">
           <summary>About these models</summary>
-          <p style={{ margin: '6px 0 0' }}>GraphSAGE and HGT read the 5-minute window graph; Mistral and Qwen read a text summary of each connection and were scored on a 7,882-edge sample of the test set, so they only appear when the incident includes sampled edges. The live model + RAG row uses the live model's verdict (switch it in the sidebar); its groundedness is the share of explanation sentences that cite evidence. Full metrics: the Evaluation page.</p>
+          <p style={{ margin: '6px 0 0' }}>GraphSAGE and HGT read the 5-minute window graph; Mistral, Qwen and Laya read a text summary of each connection; Mistral and Qwen were scored on a 7,882-edge sample of the test set, so they only appear when the incident includes sampled edges. The live model + RAG row uses the live model's verdict (switch it in the sidebar); its groundedness is the share of explanation sentences that cite evidence. Full metrics: the Evaluation page.</p>
         </details>
       </div>
     </section>

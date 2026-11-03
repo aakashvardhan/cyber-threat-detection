@@ -5,11 +5,11 @@ import { ReplayStrip } from '../components/ReplayBar.jsx';
 // Model comparison from GET /metrics. Two test sets are kept apart: the full test split (graph models)
 // and the 7,882-edge shared sample every model was scored on (the 7B LLMs are too slow for 69k edges).
 
-// Team numbering (Workbook 2): 1 GNN + RAG, 2 Mistral, 3 Qwen, 4 HGT, 5 GraphSAGE
-const NUM = { 'GNN + RAG': 1, 'Mistral-7B multi-LoRA': 2, 'Qwen2.5-7B QLoRA': 3, HGT: 4, GraphSAGE: 5 };
-const SHORT = { 'GNN + RAG': 'GNN + RAG', 'Mistral-7B multi-LoRA': 'Mistral (LoRA)', 'Qwen2.5-7B QLoRA': 'Qwen (QLoRA)', HGT: 'HGT', GraphSAGE: 'GraphSAGE' };
-const ORDER = ['GNN + RAG', 'Mistral-7B multi-LoRA', 'Qwen2.5-7B QLoRA', 'HGT', 'GraphSAGE'];
-const label = (name) => (NUM[name] ? `Model ${NUM[name]} · ${SHORT[name]}` : name);
+// Team numbering: five detection models; RAG is a separate explanation layer on top of the live detector
+const NUM = { GraphSAGE: 1, 'Mistral-7B multi-LoRA': 2, 'Qwen2.5-7B QLoRA': 3, HGT: 4, Laya: 5 };
+const SHORT = { GraphSAGE: 'GraphSAGE', 'Mistral-7B multi-LoRA': 'Mistral (LoRA)', 'Qwen2.5-7B QLoRA': 'Qwen (QLoRA)', HGT: 'HGT', Laya: 'Laya', 'GNN + RAG': 'GraphSAGE + RAG layer' };
+const ORDER = ['GraphSAGE', 'Mistral-7B multi-LoRA', 'Qwen2.5-7B QLoRA', 'HGT', 'Laya'];
+const label = (name) => (NUM[name] ? `Model ${NUM[name]} · ${SHORT[name]}` : SHORT[name] ?? name);
 
 const fmt = (v) => (v == null ? '—' : Number(v).toFixed(3));
 const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
@@ -24,19 +24,56 @@ function flat(m) {
     technique_micro_f1: t.micro_f1, technique_macro_f1: t.macro_f1 };
 }
 
-/** Scores per model on one test set. Model 1 uses Model 5's detector, so it repeats its scores. */
-function scoresOn(m, set) {
+/** Scores per model on one test set (pilot results are shown separately; 'GNN + RAG' only for the RAG comparison). */
+function scoresOn(m, set, names = ORDER) {
   const byName = Object.fromEntries((m.models || []).map((x) => [x.model, x]));
   const rows = [];
-  for (const name of ORDER) {
+  for (const name of names) {
     const x = byName[name];
-    if (!x?.detection) continue;
+    if (!x?.detection || x.pilot) continue;
     let s = null;
     if (set === 'sample') s = isSample(x) ? flat(x) : x.on_shared_sample ?? (name === 'GNN + RAG' ? byName.GraphSAGE?.on_shared_sample : null);
     else s = isSample(x) ? null : flat(x);
-    if (s) rows.push({ name, scores: s, primary: name === 'GNN + RAG' });
+    if (s) rows.push({ name, scores: s, primary: name === m.primary_model });
   }
   return rows;
+}
+
+function PilotPanel({ m, cols }) {
+  const pilots = (m.models || []).filter((x) => x.pilot && x.detection);
+  if (!pilots.length) return null;
+  return (
+    <section className="panel">
+      <div className="panel-head"><h2>Pilot results</h2><span className="small muted">Different test rows and metric definitions, so not comparable with the tables above yet</span></div>
+      <div className="table-scroll">
+        <table className="eval-table compact">
+          <thead><tr><th scope="col">Model</th>{cols.map(([k, l]) => <th key={k} scope="col" className="num">{l}</th>)}</tr></thead>
+          <tbody>
+            {pilots.map((x) => (
+              <tr key={x.model}><th scope="row">{label(x.model)}</th>{cols.map(([k]) => <td key={k} className="num mono">{fmt(flat(x)[k])}</td>)}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {pilots.map((x) => <p key={x.model} className="small muted" style={{ margin: 0, padding: '10px 20px 16px' }}>{label(x.model)}: {x.test_set}</p>)}
+      {cols === DETECTION && pilots.filter((x) => x.pilot_variants).map((x) => (
+        <div key={x.model + '-v'} className="panel-body">
+          <h3 className="mini-head">{label(x.model)}: zero-shot vs fine-tuned on the pilot (attack detection)</h3>
+          <div className="table-scroll">
+            <table className="eval-table compact">
+              <thead><tr><th scope="col">Variant</th>{['Precision', 'Recall', 'F1', 'PR-AUC'].map((h) => <th key={h} scope="col" className="num">{h}</th>)}</tr></thead>
+              <tbody>
+                {x.pilot_variants.map((v) => (
+                  <tr key={v.variant}><th scope="row">{v.variant}</th>{['precision', 'recall', 'f1', 'pr_auc'].map((k) => <td key={k} className="num mono">{fmt(v[k])}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="small muted" style={{ margin: '8px 0 0' }}>On the pilot, the base model with tuned thresholds already detects well; fine-tuning mainly adds tactic and technique answers.</p>
+        </div>
+      ))}
+    </section>
+  );
 }
 
 const DETECTION = [['precision', 'Precision'], ['recall', 'Recall'], ['f1', 'F1'], ['pr_auc', 'PR-AUC'], ['roc_auc', 'ROC-AUC']];
@@ -96,14 +133,14 @@ function SetToggle({ set, onChange }) {
 }
 
 const SET_NOTE = {
-  sample: '7,882 test edges (5,000 normal + up to 1,000 per attack type); detection weighted back to the full split. Model 1 uses Model 5\'s detector.',
+  sample: '7,882 test edges (5,000 normal + up to 1,000 per attack type); detection weighted back to the full split.',
   full: '69,161 test edges, scored one window at a time as the console runs them. The 7B LLMs were only scored on the shared sample.',
 };
 
 function Comparisons({ m }) {
-  const get = (set, name) => scoresOn(m, set).find((r) => r.name === name)?.scores;
+  const get = (set, name) => scoresOn(m, set, [...ORDER, 'GNN + RAG']).find((r) => r.name === name)?.scores;
   const cards = [
-    { a: 'GNN + RAG', b: 'GraphSAGE', set: 'full', q: 'Does adding RAG change detection?', extra: 'RAG adds cited explanations, not new predictions.' },
+    { a: 'GNN + RAG', b: 'GraphSAGE', set: 'full', q: 'Does adding the RAG layer change detection?', extra: 'RAG adds cited explanations, not new predictions.' },
     { a: 'HGT', b: 'GraphSAGE', set: 'full', q: 'Graph transformer vs GraphSAGE on the same window graphs' },
     { a: 'Qwen2.5-7B QLoRA', b: 'Mistral-7B multi-LoRA', set: 'sample', q: 'Which fine-tuned LLM is better?' },
     { a: 'Mistral-7B multi-LoRA', b: 'GraphSAGE', set: 'sample', q: 'Fine-tuned LLM vs graph model on the same edges' },
@@ -149,14 +186,49 @@ function Stat({ label, value, sub }) {
   );
 }
 
+const JUDGE = [
+  ['contextual_precision', 'Contextual precision', 'Retriever', 'Evidence useful for the true technique is ranked above the rest'],
+  ['contextual_recall', 'Contextual recall', 'Retriever', 'Key statements of the true technique that the evidence supports'],
+  ['contextual_relevancy', 'Contextual relevancy', 'Retriever', 'Retrieved evidence relevant to the incident'],
+  ['faithfulness', 'Faithfulness', 'Generator', 'Explanation claims supported by the incident record or the evidence'],
+  ['answer_relevancy', 'Answer relevancy', 'Generator', 'Explanation sentences that address the incident'],
+];
+
+function RagJudge({ j }) {
+  return (
+    <div className="panel-body" style={{ paddingTop: 16 }}>
+      <h3 className="mini-head">RAG metrics with an LLM judge ({j.incidents} incidents; judge {j.judge_model})</h3>
+      <div className="table-scroll">
+        <table className="eval-table compact">
+          <thead><tr><th scope="col">Metric</th><th scope="col">Part</th><th scope="col">Measures</th>
+            <th className="num" scope="col">All</th><th className="num" scope="col">Technique right</th><th className="num" scope="col">Technique wrong</th></tr></thead>
+          <tbody>
+            {JUDGE.map(([k, name, part, what]) => (
+              <tr key={k}>
+                <th scope="row">{name}</th><td className="small muted">{part}</td><td className="small muted">{what}</td>
+                <td className="num mono">{fmt(j.all?.[k])}</td>
+                <td className="num mono">{fmt(j.technique_right?.[k])}</td>
+                <td className={`num mono${(j.technique_wrong?.[k] ?? 1) < 0.5 ? ' worse' : ''}`}>{fmt(j.technique_wrong?.[k])}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="finding" style={{ marginTop: 10 }}>The generator stays faithful ({fmt(j.all?.faithfulness)}; {j.unsupported_claims_per_explanation} unsupported claims per explanation). Retrieval is strong when the detector's technique is right and finds nothing useful when it is wrong, because evidence is retrieved for the predicted technique.</p>
+    </div>
+  );
+}
+
 function ExplanationLayer({ m }) {
   const r = m.retrieval || {};
   const e = m.explanation || {};
+  const j = m.rag_judge;
   const q = [['Event queries', r.golden_event_queries], ['Technique queries', r.golden_technique_queries]].filter(([, v]) => v);
   return (
     <section className="panel">
-      <div className="panel-head"><h2>Explanation layer ({m.model})</h2><span className="small muted">Detection is unchanged by RAG; these measure the explanation</span></div>
+      <div className="panel-head"><h2>RAG explanation layer (on {m.model === 'GNN + RAG' ? 'GraphSAGE' : m.model})</h2><span className="small muted">Detection is unchanged by RAG; these measure the explanation</span></div>
       <div className="kpis" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        {j?.all?.faithfulness != null && <Stat label="Faithfulness" value={fmt(j.all.faithfulness)} sub="Explanation claims supported by the input (LLM judge)" />}
         <Stat label="Groundedness" value={e.groundedness != null ? fmt(e.groundedness) : 'Not run yet'}
           sub="Share of explanation sentences that cite evidence" />
         <Stat label="GNNExplainer: top-5 features" value={e.gnnexplainer_logit_drop_top5 != null ? `−${fmt(e.gnnexplainer_logit_drop_top5)}` : '—'}
@@ -166,6 +238,7 @@ function ExplanationLayer({ m }) {
           <Stat label="Behaviour check hit@5" value={r.behaviour_check_hit_at_5_range.map(fmt).join('–')} sub="leave-one-family-out, by attack family" />
         )}
       </div>
+      {m.rag_judge && <RagJudge j={m.rag_judge} />}
       {q.length > 0 && (
         <div className="panel-body" style={{ paddingTop: 16 }}>
           <h3 className="mini-head">Retrieval on the golden query set</h3>
@@ -264,7 +337,7 @@ export default function Evaluation() {
         <header className="page-head">
           <div>
             <h1>Evaluation</h1>
-            <p>All five models on the same test data. Sources the RAG pipeline cites are on the Knowledge base page.</p>
+            <p>Five detection models on the same test data, and the RAG layer that explains the live detector. Sources the RAG pipeline cites are on the Knowledge base page.</p>
           </div>
           <button className="btn" onClick={() => download(m)}>Download metrics</button>
         </header>
@@ -272,7 +345,8 @@ export default function Evaluation() {
         <section className="panel eval-hero">
           <div>
             <span className="small muted">Primary model in the console</span>
-            <strong className="eval-hero-name">Model 1 · GNN + RAG <span className="muted" style={{ fontWeight: 400, fontSize: 15 }}>({m.primary_model} detection)</span></strong>
+            <strong className="eval-hero-name">{label(m.primary_model)}</strong>
+            <span className="muted small">with the RAG explanation layer</span>
           </div>
           <p className="muted" style={{ margin: 0 }}>{m.primary_reason}</p>
           <div className="eval-hero-stats">
@@ -301,6 +375,7 @@ export default function Evaluation() {
                 </>
               )}
             </div>
+            <PilotPanel m={m} cols={tab === 'detection' ? DETECTION : TECHNIQUE} />
           </>
         )}
         {tab === 'rag' && (rag ? <ExplanationLayer m={rag} /> : <section className="panel empty">No explanation metrics yet.</section>)}
