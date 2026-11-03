@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import time
 from collections import Counter
 from pathlib import Path
@@ -105,8 +106,11 @@ class VectorStore:
             log.warning("Vector retrieval off: cannot load embedding model %s (%s)", model, exc)
             return None
 
+        lock = threading.Lock()   # one encode at a time: concurrent CPU calls can fail on Windows ("could not create a primitive")
+
         def embed(texts: list[str]) -> list[list[float]]:
-            return encoder.encode(texts, batch_size=128, normalize_embeddings=True, show_progress_bar=False).tolist()
+            with lock:
+                return encoder.encode(texts, batch_size=128, normalize_embeddings=True, show_progress_bar=False).tolist()
 
         kdir = Path(knowledge_dir) if knowledge_dir else None
         sources: dict[str, list[dict]] = {}

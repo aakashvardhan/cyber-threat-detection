@@ -80,7 +80,8 @@ def build_state(settings: Settings) -> AppState:
         detectors={detector.name: detector} if detector.name in GRAPH_DETECTORS else {})
 
 
-OFFLINE_MODELS = {"Mistral-7B multi-LoRA": "mistral", "Qwen2.5-7B QLoRA": "qwen"}
+OFFLINE_MODELS = {"Mistral-7B multi-LoRA": "mistral", "Qwen2.5-7B QLoRA": "qwen", "Laya": "laya"}
+OFFLINE_NOTES = {"laya": "Compact classifier; pilot evaluation so far, per-edge predictions pending"}
 
 
 def models_view(state: AppState) -> dict:
@@ -101,7 +102,7 @@ def models_view(state: AppState) -> dict:
     for full, kind in OFFLINE_MODELS.items():
         if full in names:
             models.append({"id": kind, "name": full, "live": False, "available": False, "active": False,
-                           "note": "7B language model, scored offline on a 7,882-edge sample; see the Research tab"})
+                           "note": OFFLINE_NOTES.get(kind, "7B language model, scored offline on a 7,882-edge sample; see the Research tab")})
     return {"active": state.detector.name, "models": models}
 
 
