@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { ErrorNote, SeverityChip } from '../components/badges.jsx';
 import EvidenceFunnel from '../components/EvidenceFunnel.jsx';
 import WindowGraph from '../components/WindowGraph.jsx';
+import KnowledgeGraph from '../components/KnowledgeGraph.jsx';
 import { WarnTriangle } from '../components/icons.jsx';
 import { useReplay } from '../state/ReplayContext.jsx';
 import { bytes, dateTime, hhmm, num, pct, plural, prob, service, shortDate, timeSpan } from '../utils/format.js';
@@ -11,7 +12,8 @@ import { byPriority, NEXT_ACTION, REOPEN_TO, STATUSES, STATUS_LABEL, WORKFLOW, t
 
 const POLL_MS = 2000;
 const EDGE_PAGE = 10;
-const SOURCE_LABEL = { mitre: 'MITRE', procedure: 'Procedure', cti: 'CTI-HAL', cve: 'CVE' };
+const SOURCE_LABEL = { mitre: 'MITRE', graph: 'Knowledge graph', procedure: 'Procedure', cti: 'CTI-HAL', cve: 'CVE' };
+const LEVEL_LABEL = { tactic: 'Tactic fallback', procedure: 'Procedure', path: 'Relations', community: 'Community', history: 'Log context' };
 const TABS = [['triage', 'Triage'], ['response', 'Response'], ['research', 'Research']];
 
 export default function IncidentDetail() {
@@ -219,10 +221,10 @@ function Triage({ inc, model: primaryModel, saving, onRegenerate, onUseTechnique
                       <span className="mono" style={{ color: 'var(--accent)' }}>[{evidenceNo[e.evidence_id]}]</span>
                       <span className="tag">{SOURCE_LABEL[e.source] || e.source}</span>
                       {(() => {
-                        const level = e.level === 'tactic' ? 'Tactic fallback' : e.level === 'procedure' ? 'Procedure' : 'Technique';
+                        const level = LEVEL_LABEL[e.level] || 'Technique';
                         return level !== (SOURCE_LABEL[e.source] || e.source) && <span className={`tag ${e.level === 'tactic' ? 'warn-text' : ''}`}>{level}</span>;
                       })()}
-                      {e.score != null && <span className="muted" style={{ marginLeft: 'auto' }} title="Similarity between the incident and this source (1 = exact technique match)">relevance <span className="mono">{e.score.toFixed(2)}</span></span>}
+                      {e.score != null && e.source !== 'graph' && <span className="muted" style={{ marginLeft: 'auto' }} title="Similarity between the incident and this source (1 = exact technique match)">relevance <span className="mono">{e.score.toFixed(2)}</span></span>}
                     </div>
                     <strong>{e.url ? <a href={e.url} target="_blank" rel="noreferrer">{e.title}</a> : e.title}</strong>
                     <p className="small muted clamp">{e.text}</p>
@@ -245,6 +247,7 @@ function Triage({ inc, model: primaryModel, saving, onRegenerate, onUseTechnique
           <TrafficSummary edges={inc.edges} />
         </div>
       </div>
+      <KnowledgeGraph trace={inc.retrieval_trace} active={active} evidenceNo={evidenceNo} />
       <WindowGraph inc={inc} explained={mx?.status === 'ready' ? mx : null} />
       <EdgesTable edges={inc.edges} />
     </>
