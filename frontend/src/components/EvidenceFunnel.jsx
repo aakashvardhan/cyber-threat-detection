@@ -1,6 +1,6 @@
 import { num } from '../utils/format.js';
 
-const SOURCE_LABEL = { mitre: 'MITRE', procedure: 'Procedures', cti: 'CTI-HAL', cve: 'CVE' };
+const SOURCE_LABEL = { mitre: 'MITRE', graph: 'Graph facts', procedure: 'Procedures', cti: 'CTI-HAL', cve: 'CVE' };
 
 /** "How the evidence was found": retrieval trace drawn as a funnel,
     from candidates searched per source, to sources kept, to cited sentences. */
@@ -11,6 +11,7 @@ export default function EvidenceFunnel({ trace, explanation, evidenceCount }) {
   const sentences = explanation?.sentences || [];
   const cited = sentences.filter((s) => s.citations?.length).length;
   const generating = explanation?.status === 'generating';
+  const graph = trace.graph;
   // e.g. "1 MITRE + 5 Procedures", so the total adds up visibly
   const kept = sources.filter((s) => s.returned > 0).map((s) => `${s.returned} ${SOURCE_LABEL[s.source] || s.source}`).join(' + ');
 
@@ -19,7 +20,13 @@ export default function EvidenceFunnel({ trace, explanation, evidenceCount }) {
       <div className="funnel-query small"><span className="funnel-title">1. Query</span> <span className="mono">{trace.query}</span></div>
       <div className="funnel">
       <div className="funnel-step funnel-wide">
-        <span className="funnel-title">2. Search by technique</span>
+        <span className="funnel-title">{graph ? '2. Traverse the knowledge graph' : '2. Search by technique'}</span>
+        {graph && (
+          <span className="small muted">
+            From {graph.seeds.join(', ')} in the ATT&amp;CK graph ({graph.store === 'neo4j' ? 'Neo4j' : 'in memory'}):
+            {' '}{num(graph.subgraph.nodes)} nodes, {num(graph.subgraph.edges)} relations, ranked by Personalized PageRank
+          </span>
+        )}
         <div className="funnel-sources">
           {sources.map((s) => (
             <div key={s.source} className={`funnel-src ${s.skipped ? 'is-skipped' : ''}`}>
@@ -34,14 +41,14 @@ export default function EvidenceFunnel({ trace, explanation, evidenceCount }) {
             </div>
           ))}
         </div>
-        <span className="small muted">Grey = candidates scored · blue = kept</span>
+        <span className="small muted">Grey = candidates {graph ? 'found along the graph' : 'scored'} · blue = kept</span>
       </div>
       <Arrow />
       <div className="funnel-step">
         <span className="funnel-title">3. Rank</span>
         <span className="funnel-big">{num(evidenceCount)}</span>
         <span className="small muted">sources kept: {kept || 'none'}</span>
-        <span className="small muted">Technique page plus the best {trace.top_k ?? '—'} others{trace.min_score != null ? `, score ≥ ${trace.min_score}` : ''}</span>
+        <span className="small muted">{graph ? `Technique page, graph facts and the best ${trace.top_k ?? '—'} texts on the selected relations` : `Technique page plus the best ${trace.top_k ?? '—'} others${trace.min_score != null ? `, score ≥ ${trace.min_score}` : ''}`}</span>
         <span className={`small ${trace.fallback_to_tactic ? 'warn-text' : 'muted'}`}>
           {trace.fallback_to_tactic ? 'Fell back to tactic-level evidence' : 'Technique-level match, no fallback'}
         </span>

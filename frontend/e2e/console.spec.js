@@ -90,9 +90,16 @@ test('5. Incident detail shows explanation, evidence and the evidence funnel', a
   await expect(page).toHaveURL(/\/incidents\/INC-\d+/);
   await expect(page.locator('.sentence').first()).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.evidence').first()).toBeVisible();
-  await expect(page.locator('.funnel')).toContainText('Search by technique');
-  await expect(page.locator('.funnel')).toContainText('MITRE');
   const detail = await page.request.get(`${API}${new URL(page.url()).pathname}`, { headers: { 'X-API-Key': KEY } });
+  const trace = (await detail.json()).retrieval_trace;
+  await expect(page.locator('.funnel')).toContainText(trace?.graph ? 'Traverse the knowledge graph' : 'Search by technique');
+  await expect(page.locator('.funnel')).toContainText('MITRE');
+  if (trace?.graph) {                                                     // GraphRAG backend (API 0.6.0)
+    const kg = page.locator('section.panel', { has: page.getByRole('heading', { name: /Knowledge graph/ }) });
+    await expect(kg.getByRole('img', { name: /Knowledge graph around/ })).toBeVisible();
+    await kg.getByRole('button').first().click();
+    await expect(kg.locator('.kg-card')).toBeVisible();
+  }
   await expect(page.getByRole('heading', { name: /5-minute window/ })).toBeVisible();   // window graph (API 0.4.2)
   await page.getByRole('tab', { name: 'Network' }).click();
   await expect(page.getByRole('img', { name: 'Network graph of the window' })).toBeVisible();
@@ -205,6 +212,7 @@ test('13. Evaluation compares the models from GET /metrics', async ({ page }) =>
     await expect(page.getByRole('heading', { name: 'Evaluation' })).toBeVisible();   // the page did not crash
   }
   await expect(page.getByText('Retrieval on the golden query set')).toBeVisible();
+  if (metrics.graph_rag) await expect(page.getByRole('heading', { name: 'GraphRAG vs vector RAG' })).toBeVisible();
   await page.getByRole('tab', { name: 'RAG ablation' }).click();
   await expect(page.getByRole('heading', { name: 'RAG ablations' })).toBeVisible();
 });

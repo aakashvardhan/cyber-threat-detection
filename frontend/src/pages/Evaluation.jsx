@@ -7,7 +7,7 @@ import { ReplayStrip } from '../components/ReplayBar.jsx';
 
 // Team numbering: five detection models; RAG is a separate explanation layer on top of the live detector
 const NUM = { GraphSAGE: 1, 'Mistral-7B multi-LoRA': 2, 'Qwen2.5-7B QLoRA': 3, HGT: 4, Laya: 5 };
-const SHORT = { GraphSAGE: 'GraphSAGE', 'Mistral-7B multi-LoRA': 'Mistral (LoRA)', 'Qwen2.5-7B QLoRA': 'Qwen (QLoRA)', HGT: 'HGT', Laya: 'Laya', 'GNN + RAG': 'GraphSAGE + RAG layer' };
+const SHORT = { GraphSAGE: 'GraphSAGE', 'Mistral-7B multi-LoRA': 'Mistral (LoRA)', 'Qwen2.5-7B QLoRA': 'Qwen (QLoRA)', HGT: 'HGT', Laya: 'Laya' };
 const ORDER = ['GraphSAGE', 'Mistral-7B multi-LoRA', 'Qwen2.5-7B QLoRA', 'HGT', 'Laya'];
 const label = (name) => (NUM[name] ? `Model ${NUM[name]} · ${SHORT[name]}` : SHORT[name] ?? name);
 
@@ -24,7 +24,7 @@ function flat(m) {
     technique_micro_f1: t.micro_f1, technique_macro_f1: t.macro_f1 };
 }
 
-/** Scores per model on one test set (pilot results are shown separately; 'GNN + RAG' only for the RAG comparison). */
+/** Scores per model on one test set (pilot results are shown separately). */
 function scoresOn(m, set, names = ORDER) {
   const byName = Object.fromEntries((m.models || []).map((x) => [x.model, x]));
   const rows = [];
@@ -32,9 +32,9 @@ function scoresOn(m, set, names = ORDER) {
     const x = byName[name];
     if (!x?.detection || x.pilot) continue;
     let s = null;
-    if (set === 'sample') s = isSample(x) ? flat(x) : x.on_shared_sample ?? (name === 'GNN + RAG' ? byName.GraphSAGE?.on_shared_sample : null);
+    if (set === 'sample') s = isSample(x) ? flat(x) : x.on_shared_sample ?? null;
     else s = isSample(x) ? null : flat(x);
-    if (s) rows.push({ name, scores: s, primary: name === m.primary_model });
+    if (s) rows.push({ name, scores: s });
   }
   return rows;
 }
@@ -89,8 +89,8 @@ function MetricTable({ rows, cols, note }) {
           <thead><tr><th scope="col">Model</th>{shown.map(([k, l]) => <th key={k} scope="col" className="num">{l}</th>)}</tr></thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.name} className={r.primary ? 'is-primary' : ''}>
-                <th scope="row">{label(r.name)}{r.primary && ' (primary)'}</th>
+              <tr key={r.name}>
+                <th scope="row">{label(r.name)}</th>
                 {shown.map(([k]) => {
                   const v = r.scores[k];
                   return <td key={k} className={`num mono${v != null && v === best[k] && rows.length > 1 ? ' is-best' : ''}`}>{fmt(v)}</td>;
@@ -114,7 +114,7 @@ function BarPanel({ title, rows, k, note }) {
         {rows.map((r) => (
           <div key={r.name} className="eval-bar-row">
             <div className="eval-bar-label"><span>{label(r.name)}</span><span className="mono">{fmt(r.scores[k])}</span></div>
-            <div className="eval-bar"><span style={{ width: `${((r.scores[k] ?? 0) / max) * 100}%` }} className={r.primary ? 'is-primary' : ''} /></div>
+            <div className="eval-bar"><span style={{ width: `${((r.scores[k] ?? 0) / max) * 100}%` }} className={(r.scores[k] ?? -1) === max ? 'is-primary' : ''} /></div>
           </div>
         ))}
         <span className="small muted">{note}</span>
@@ -134,13 +134,12 @@ function SetToggle({ set, onChange }) {
 
 const SET_NOTE = {
   sample: '7,882 test edges (5,000 normal + up to 1,000 per attack type); detection weighted back to the full split.',
-  full: '69,161 test edges, scored one window at a time as the console runs them. The 7B LLMs were only scored on the shared sample.',
+  full: '69,161 test edges (8.2% attacks), scored one window at a time as the console runs them. The 7B LLMs were only scored on the shared sample.',
 };
 
 function Comparisons({ m }) {
-  const get = (set, name) => scoresOn(m, set, [...ORDER, 'GNN + RAG']).find((r) => r.name === name)?.scores;
+  const get = (set, name) => scoresOn(m, set).find((r) => r.name === name)?.scores;
   const cards = [
-    { a: 'GNN + RAG', b: 'GraphSAGE', set: 'full', q: 'Does adding the RAG layer change detection?', extra: 'RAG adds cited explanations, not new predictions.' },
     { a: 'HGT', b: 'GraphSAGE', set: 'full', q: 'Graph transformer vs GraphSAGE on the same window graphs' },
     { a: 'Qwen2.5-7B QLoRA', b: 'Mistral-7B multi-LoRA', set: 'sample', q: 'Which fine-tuned LLM is better?' },
     { a: 'Mistral-7B multi-LoRA', b: 'GraphSAGE', set: 'sample', q: 'Fine-tuned LLM vs graph model on the same edges' },
@@ -197,7 +196,7 @@ const JUDGE = [
 function RagJudge({ j }) {
   return (
     <div className="panel-body" style={{ paddingTop: 16 }}>
-      <h3 className="mini-head">RAG metrics with an LLM judge ({j.incidents} incidents; judge {j.judge_model})</h3>
+      <h3 className="mini-head">RAG metrics with an LLM judge, vector retriever ({j.incidents} incidents; judge {j.judge_model})</h3>
       <div className="table-scroll">
         <table className="eval-table compact">
           <thead><tr><th scope="col">Metric</th><th scope="col">Part</th><th scope="col">Measures</th>
@@ -216,6 +215,77 @@ function RagJudge({ j }) {
       </div>
       <p className="finding" style={{ marginTop: 10 }}>The generator stays faithful ({fmt(j.all?.faithfulness)}; {j.unsupported_claims_per_explanation} unsupported claims per explanation). Retrieval is strong when the detector's technique is right and finds nothing useful when it is wrong, because evidence is retrieved for the predicted technique.</p>
     </div>
+  );
+}
+
+/** GraphRAG (ATT&CK knowledge graph) vs the earlier vector retriever, on the same incidents. */
+function GraphRagPanel({ g, vectorJudge }) {
+  const ret = g.retrieval?.all_labelled;
+  const s = g.retrieval?.judge_sample_50;
+  const kg = g.knowledge_graph || {};
+  if (!ret) return null;
+  const row = (label, what, v, gr, better = true) => (
+    <tr key={label}>
+      <th scope="row">{label}</th><td className="small muted">{what}</td>
+      <td className="num mono">{v}</td>
+      <td className={`num mono${better ? ' is-best' : ''}`}>{gr}</td>
+    </tr>
+  );
+  const gj = g.rag_judge;
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>GraphRAG vs vector RAG</h2>
+        <span className="small muted">Same incidents, same input; only the retriever changes</span>
+      </div>
+      <div className="kpis" style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <Stat label="Knowledge graph" value={`${(kg.nodes ?? 0).toLocaleString('en-US')} nodes`}
+          sub={`${(kg.edges ?? 0).toLocaleString('en-US')} relations · ${kg.communities ?? '—'} technique communities`} />
+        <Stat label="True technique reached, technique wrong" value={`${pct(ret.technique_wrong?.true_technique_in_context?.graph)}`}
+          sub={`vector RAG ${pct(ret.technique_wrong?.true_technique_in_context?.vector)} · ${ret.technique_wrong?.incidents} incidents`} />
+        <Stat label="Retrieval time (median)" value={`${ret.latency_ms_median?.graph} ms`} sub={`vector RAG ${ret.latency_ms_median?.vector} ms`} />
+        <Stat label="Store" value={g.store === 'neo4j' ? 'Neo4j' : 'In memory'} sub="Neo4j when NEO4J_URI is set" />
+      </div>
+      <div className="panel-body" style={{ paddingTop: 16 }}>
+        <h3 className="mini-head">Does the retrieved context reach the true technique? ({ret.all?.incidents?.toLocaleString('en-US')} labelled incidents; no LLM)</h3>
+        <div className="table-scroll">
+          <table className="eval-table compact">
+            <thead><tr><th scope="col">Measure</th><th scope="col">Meaning</th><th className="num" scope="col">Vector RAG</th><th className="num" scope="col">GraphRAG</th></tr></thead>
+            <tbody>
+              {row('Technique right', 'Context names the true technique', pct(ret.technique_right?.true_technique_in_context?.vector), pct(ret.technique_right?.true_technique_in_context?.graph), false)}
+              {row('Technique wrong', 'Context still names the true technique', pct(ret.technique_wrong?.true_technique_in_context?.vector), pct(ret.technique_wrong?.true_technique_in_context?.graph))}
+              {row('All incidents', '', pct(ret.all?.true_technique_in_context?.vector), pct(ret.all?.true_technique_in_context?.graph))}
+              {row('Judge sample (50)', 'The incidents the LLM judge scores', pct(s?.all?.true_technique_in_context?.vector), pct(s?.all?.true_technique_in_context?.graph))}
+              {row('Context items', 'Evidence items given to the LLM', ret.context_items?.vector, ret.context_items?.graph, false)}
+            </tbody>
+          </table>
+        </div>
+        <p className="finding" style={{ marginTop: 10 }}>
+          Vector RAG retrieves only for the predicted technique, so when that technique is wrong it never reaches the true one.
+          GraphRAG also follows what the same actors do ({pct(ret.technique_wrong?.graph_next_step_hit)} of wrong-technique incidents
+          have the true technique among those), the behaviour check's alternative and the source's earlier incidents.
+        </p>
+        {(gj || vectorJudge) && (
+          <>
+            <h3 className="mini-head" style={{ marginTop: 18 }}>LLM-judge metrics (50 incidents)</h3>
+            <div className="table-scroll">
+              <table className="eval-table compact">
+                <thead><tr><th scope="col">Metric</th><th scope="col">Part</th><th className="num" scope="col">Vector RAG</th><th className="num" scope="col">GraphRAG</th><th className="num" scope="col">GraphRAG, technique wrong</th></tr></thead>
+                <tbody>
+                  {JUDGE.map(([k, name, part]) => (
+                    <tr key={k}><th scope="row">{name}</th><td className="small muted">{part}</td>
+                      <td className="num mono">{fmt(vectorJudge?.all?.[k])}</td>
+                      <td className="num mono">{gj ? fmt(gj.all?.[k]) : 'pending'}</td>
+                      <td className="num mono">{gj ? fmt(gj.technique_wrong?.[k]) : 'pending'}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!gj && <p className="small muted" style={{ marginTop: 8 }}>GraphRAG judge scores: run <span className="mono">python scripts/eval_rag_judge.py --retriever graph</span>, then <span className="mono">scripts/add_graph_rag_metrics.py</span>.</p>}
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -328,7 +398,6 @@ export default function Evaluation() {
   const rows = scoresOn(m, set);
   const rag = (m.models || []).find((x) => x.retrieval || x.explanation);
   const caveats = (m.models || []).filter((x) => x.caveat);
-  const attackShare = m.test_attack_edges && m.test_edges ? m.test_attack_edges / m.test_edges : null;
 
   return (
     <>
@@ -337,23 +406,10 @@ export default function Evaluation() {
         <header className="page-head">
           <div>
             <h1>Evaluation</h1>
-            <p>Five detection models on the same test data, and the RAG layer that explains the live detector. Sources the RAG pipeline cites are on the Knowledge base page.</p>
+            <p>Five detection models on the same test data. Switch the live model in the sidebar; the RAG layer explains the detections of whichever model is live. Sources it cites are on the Knowledge base page.</p>
           </div>
           <button className="btn" onClick={() => download(m)}>Download metrics</button>
         </header>
-
-        <section className="panel eval-hero">
-          <div>
-            <span className="small muted">Primary model in the console</span>
-            <strong className="eval-hero-name">{label(m.primary_model)}</strong>
-            <span className="muted small">with the RAG explanation layer</span>
-          </div>
-          <p className="muted" style={{ margin: 0 }}>{m.primary_reason}</p>
-          <div className="eval-hero-stats">
-            {m.test_edges && <div><span className="small muted">Test edges</span><strong className="mono">{m.test_edges.toLocaleString('en-US')}</strong></div>}
-            {attackShare != null && <div><span className="small muted">Attack share</span><strong className="mono">{(attackShare * 100).toFixed(1)}%</strong></div>}
-          </div>
-        </section>
 
         <div role="tablist" className="tabs">
           {TABS.map(([k, l]) => <button key={k} role="tab" className="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
@@ -378,6 +434,7 @@ export default function Evaluation() {
             <PilotPanel m={m} cols={tab === 'detection' ? DETECTION : TECHNIQUE} />
           </>
         )}
+        {tab === 'rag' && m.graph_rag && <GraphRagPanel g={m.graph_rag} vectorJudge={m.graph_rag.rag_judge_vector || rag?.rag_judge} />}
         {tab === 'rag' && (rag ? <ExplanationLayer m={rag} /> : <section className="panel empty">No explanation metrics yet.</section>)}
         {tab === 'ablation' && (m.rag_ablation?.length ? <Ablations items={m.rag_ablation} /> : <section className="panel empty">No ablation results yet.</section>)}
 
