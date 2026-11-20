@@ -58,6 +58,36 @@ Follows `notebooks/RAG/rag.ipynb`. For each incident, on the first `GET /inciden
 | `ATTACK_STIX` | `data/knowledge/enterprise-attack.json`, else the Oct 6 demo copy | Technique documents for the behaviour check; procedure examples |
 | `BEHAVIOR_CHECK` | `true` | |
 
+## GraphRAG (v0.6.0)
+
+Retrieval runs over the MITRE ATT&CK knowledge graph (`app/attack_graph.py`, `app/graph_rag.py`), following the three
+stages of Peng et al. 2024 (*Graph Retrieval-Augmented Generation: A Survey*, arXiv:2408.08921):
+
+1. **Graph-based indexing.** Built from the STIX file at start-up (about 2 s): techniques, tactics, groups, software,
+   campaigns, mitigations, detection strategies, data components and CTI-HAL reports, with ATT&CK's relations
+   (USES, MITIGATES, DETECTS, ...). Procedure examples are the text of the USES edges; CTI-HAL spans hang on
+   Report -DESCRIBES-> Technique edges. Techniques that the same actors use together form communities (Louvain;
+   Microsoft GraphRAG, Edge et al. 2024, uses Leiden), each with a summary.
+2. **Graph-guided retrieval.** The local subgraph around the predicted technique (plus the behaviour check's
+   alternative when it disagrees, and the techniques of earlier incidents from the same source), ranked by
+   Personalized PageRank. Selected: the actors that use the technique, what those actors also use later in the
+   kill chain (with lift over the base rate), mitigations, network data components, the technique's community.
+3. **Graph-enhanced generation.** These become numbered `graph` evidence next to the procedure / CTI / CVE text
+   found along the same edges; the prompt asks for one sentence on documented users (never attribution) and one on
+   what to watch for next. `retrieval_trace.graph` holds the subgraph the console draws.
+
+| Setting | Default | |
+|---|---|---|
+| `RETRIEVER` | `graph` | `vector` = the earlier text retriever (baseline) |
+| `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` | unset | When set, graph queries go to Neo4j; unset or unreachable = the same graph in memory |
+
+Neo4j: `docker compose up -d neo4j` (repo root, `NEO4J_PASSWORD` in `.env`), then `python scripts/load_neo4j.py --check`
+loads the graph and checks that Neo4j returns the same subgraph and evidence as the in-memory graph.
+
+Evaluation: `scripts/eval_graph_retrieval.py` (no LLM: does the context reach the true technique?),
+`scripts/eval_rag_judge.py --retriever graph|vector` (LLM judge), then `scripts/add_graph_rag_metrics.py`
+merges both into `metrics.json` for the Evaluation page.
+
 ## Notes
 
 - Retrieval maps the old UWF tactic "Defense Evasion" to the newer ATT&CK names (Stealth, Defense Impairment), so tactic fallback still finds evidence.

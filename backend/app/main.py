@@ -1,4 +1,4 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.5.0).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.6.0).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
@@ -16,7 +16,9 @@ from fastapi.responses import JSONResponse
 from app import schemas
 from app.config import DEMO_DATA, Settings
 from app.detectors import GRAPH_DETECTORS, Detector, graph_checkpoint, load_detector, load_graph_detector
+from app.attack_graph import AttackGraph, Neo4jStore, NetworkXStore
 from app.behavior import BehaviorSearch
+from app.graph_rag import GraphRetriever
 from app.explain import ExplanationManager
 from app.graph import window_graph
 from app.incidents import Incident, ReplayController, ReplayError
@@ -45,6 +47,7 @@ class AppState:
     primary_model: str
     edit_lock: threading.Lock
     detectors: dict | None = None      # loaded graph models by id, for switching the live model
+    graph_rag: GraphRetriever | None = None
 
 
 def build_state(settings: Settings) -> AppState:
@@ -63,21 +66,53 @@ def build_state(settings: Settings) -> AppState:
         if kb.vector is None and settings.rag_mode == "vector":
             raise RuntimeError("RAG_MODE=vector but the vector store could not be loaded (see the log above)")
         behavior.vector = kb.vector
+    graph_rag = load_graph_rag(settings, kb)
     metrics = load_metrics(settings.metrics_file)
     primary = settings.primary_model_name or (
         detector.name if detector.name == "heuristic-fallback" else metrics.get("primary_model") or detector.name)
     log.info("Replay: %s (%d windows) | detector: %s | knowledge base: %s | retrieval: %s | behaviour check: %s | LLM: %s",
              replay_data.source, len(replay_data), detector.name, settings.knowledge_dir,
-             f"vector ({kb.vector.model_name})" if kb.vector else "token overlap",
+             (f"GraphRAG ({graph_rag.store.name})" if graph_rag else
+              f"vector ({kb.vector.model_name})" if kb.vector else "token overlap"),
              "on" if behavior.enabled else "off", settings.llm_provider)
-    return AppState(
+    state = AppState(
         settings=settings, replay_data=replay_data, detector=detector,
         controller=ReplayController(replay_data, detector, settings.incident_gap_minutes),
-        kb=kb, explanations=ExplanationManager(settings, kb, behavior=behavior, data=replay_data),
+        kb=kb, explanations=ExplanationManager(settings, kb, behavior=behavior, data=replay_data, graph=graph_rag),
         model_explainer=ModelExplainer(detector, replay_data, settings.gnn_explainer_epochs, settings.gnn_explainer),
         model_outputs=ModelOutputs.load(settings.model_outputs, replay_data),
         metrics=metrics, primary_model=primary, edit_lock=threading.Lock(),
-        detectors={detector.name: detector} if detector.name in GRAPH_DETECTORS else {})
+        detectors={detector.name: detector} if detector.name in GRAPH_DETECTORS else {}, graph_rag=graph_rag)
+    state.explanations.history = lambda incident: earlier_incidents(state, incident)
+    return state
+
+
+def load_graph_rag(settings: Settings, kb: KnowledgeBase) -> GraphRetriever | None:
+    """GraphRAG over the ATT&CK knowledge graph; queries go to Neo4j when NEO4J_URI is set, else to NetworkX."""
+    if settings.retriever != "graph":
+        return None
+    if settings.attack_stix is None or not settings.attack_stix.exists():
+        log.warning("RETRIEVER=graph but no ATT&CK STIX file (ATTACK_STIX); using the text retriever")
+        return None
+    graph = AttackGraph.from_stix(settings.attack_stix, kb.chunks.get("cti"))
+    store = None
+    if settings.neo4j_uri:
+        try:
+            store = Neo4jStore.connect(settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password or "",
+                                       settings.neo4j_database)
+            log.info("GraphRAG queries Neo4j at %s", settings.neo4j_uri)
+        except Exception as exc:  # noqa: BLE001 - keep the console running on the in-memory graph
+            log.warning("Neo4j unavailable (%s: %s); GraphRAG uses the in-memory graph", type(exc).__name__, exc)
+    return GraphRetriever(graph, store or NetworkXStore(graph), kb)
+
+
+def earlier_incidents(state: AppState, incident: Incident, hours: int = 24) -> list[Incident]:
+    """Incidents from the same source that ended before this one started (no look-ahead), oldest first."""
+    horizon = pd.Timedelta(hours=hours)
+    earlier = [i for i in state.controller.state.incidents.values()
+               if i.source_ip == incident.source_ip and i.incident_id != incident.incident_id
+               and i.last_window < incident.first_window and incident.first_window - i.last_window <= horizon]
+    return sorted(earlier, key=lambda i: i.first_window)
 
 
 OFFLINE_MODELS = {"Mistral-7B multi-LoRA": "mistral", "Qwen2.5-7B QLoRA": "qwen", "Laya": "laya"}
@@ -222,7 +257,7 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.5.0",
+    app = FastAPI(title="Threat Detection Console API", version="0.6.0",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["*"])

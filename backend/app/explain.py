@@ -39,6 +39,17 @@ SYSTEM_PROMPT = (
     "technique and asking the analyst to verify which one fits (citations [])."
 )
 
+# GraphRAG: the evidence also holds facts retrieved from the ATT&CK knowledge graph (source "graph")
+GRAPH_PROMPT = SYSTEM_PROMPT + (
+    " Some evidence comes from the ATT&CK knowledge graph (source 'graph'): who uses the technique, what those "
+    "actors also do, how it is mitigated and detected, its technique community, and earlier activity from the same "
+    "source. Write 4 to 6 sentences: after the technique sentence, add one sentence on documented users of the "
+    "technique, citing that graph evidence and saying they are documented users, never that they did this incident; "
+    "and one sentence on what to watch for next, naming one or two techniques from the graph evidence with the share "
+    "of actors that use them. If there is 'Earlier activity from this source' evidence, say whether the sequence "
+    "matches documented tradecraft, citing it. In next_steps, include watching for those next techniques."
+)
+
 
 class Redactor:
     """Replaces IPs with host-A, host-B, ... before text leaves the backend, and maps them back."""
@@ -113,7 +124,9 @@ def fallback_explanation(brief: dict, evidence: list[dict], mitigations: list[di
     if mitre:
         sentences.append({"text": (f"The behaviour matches MITRE ATT&CK {mitre['ref']} ({mitre['title']}) in the "
                                    f"{brief['tactic']} tactic: {mitre['text']}"), "citations": [mitre["evidence_id"]]})
-    for item in [e for e in evidence if e["source"] != "mitre"][:2]:
+    for item in [e for e in evidence if e["source"] == "graph" and e["level"] in ("path", "history")][:2]:
+        sentences.append({"text": f"{item['title']}: {item['text']}", "citations": [item["evidence_id"]]})
+    for item in [e for e in evidence if e["source"] not in ("mitre", "graph")][:2]:
         prefix = "Related tradecraft" if item["level"] == "tactic" else "Documented use"
         sentences.append({"text": f"{prefix}: {item['title']} - {item['text']}", "citations": [item["evidence_id"]]})
     check = brief.get("behavior_check")
@@ -166,13 +179,13 @@ class LLMClient:
         s = self.settings
         return s.llm_provider in {"groq", "local"} and bool(s.llm_model) and bool(s.llm_base_url)
 
-    def chat(self, user_prompt: str) -> str:
+    def chat(self, user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
         s = self.settings
         headers = {"Content-Type": "application/json"}
         if s.llm_api_key:
             headers["Authorization"] = f"Bearer {s.llm_api_key}"
         body = {"model": s.llm_model, "temperature": 0.2, "max_tokens": s.llm_max_tokens,
-                "messages": [{"role": "system", "content": SYSTEM_PROMPT},
+                "messages": [{"role": "system", "content": system_prompt},
                              {"role": "user", "content": user_prompt}]}
         if s.llm_provider == "groq":
             body["response_format"] = {"type": "json_object"}       # Groq JSON mode: the reply is valid JSON
@@ -190,11 +203,13 @@ class LLMClient:
 
 class ExplanationManager:
     def __init__(self, settings: Settings, kb: KnowledgeBase, client: LLMClient | None = None, workers: int = 2,
-                 behavior: BehaviorSearch | None = None, data=None):
+                 behavior: BehaviorSearch | None = None, data=None, graph=None, history=None):
         self.settings = settings
         self.kb = kb
         self.behavior = behavior
         self.data = data          # ReplayData, for the traffic features of an incident's edges
+        self.graph = graph        # GraphRetriever (GraphRAG); None = the text retriever
+        self.history = history    # incident -> earlier incidents from the same source (the log context)
         self.client = client or LLMClient(settings)
         self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="explain")
         self.lock = threading.Lock()
@@ -216,15 +231,24 @@ class ExplanationManager:
         brief = incident_brief(incident, self.kb)
         features = self._features(incident)
         event = event_fields(features) if features is not None else None
-        retrieval = self.kb.retrieve(brief["technique_id"], brief["tactic"], retrieval_query(brief),
-                                     self.settings.retrieval_top_k, self.settings.retrieval_min_score, event=event)
-        trace = dict(retrieval.trace)
+        check = None
         if features is not None and self.behavior is not None and self.behavior.enabled:
             check = self.behavior.check(features, brief["technique_id"])
-            if check:
-                trace["behavior_check"] = check
-                if check["agrees_with_detector"] is False:     # only a disagreement is worth a sentence
-                    brief["behavior_check"] = {k: check[k] for k in ("reading", "candidates", "agrees_with_detector")}
+            if check and check["agrees_with_detector"] is False:     # only a disagreement is worth a sentence
+                brief["behavior_check"] = {k: check[k] for k in ("reading", "candidates", "agrees_with_detector")}
+        if self.graph is not None:
+            alternatives = ([c["technique_id"] for c in check["candidates"][:2]]
+                            if check and check["agrees_with_detector"] is False else [])
+            retrieval = self.graph.retrieve(brief["technique_id"], brief["tactic"], retrieval_query(brief),
+                                            self.settings.retrieval_top_k, event=event, alternatives=alternatives,
+                                            history=self._history(incident))
+        else:
+            retrieval = self.kb.retrieve(brief["technique_id"], brief["tactic"], retrieval_query(brief),
+                                         self.settings.retrieval_top_k, self.settings.retrieval_min_score, event=event)
+            retrieval.trace.setdefault("retriever", "vector" if self.kb.vector is not None else "token")
+        trace = dict(retrieval.trace)
+        if check:
+            trace["behavior_check"] = check
         incident.evidence = retrieval.evidence
         incident.retrieval_trace = trace
         incident.cve_status = retrieval.cve_status
@@ -233,6 +257,18 @@ class ExplanationManager:
                                 "sentences": [], "next_steps": []}
         self.running.add(incident.incident_id)
         self.pool.submit(self._run, incident, brief, list(retrieval.evidence))
+
+    def _history(self, incident: Incident) -> list[dict]:
+        """Earlier incidents from the same source (only ones that ended before this one started)."""
+        if self.history is None:
+            return []
+        try:
+            return [{"incident_id": i.incident_id, "technique_id": i.effective_technique,
+                     "name": self.kb.technique_name(i.effective_technique), "first_seen": iso(i.first_window),
+                     "target_count": len({e.destination_ip for e in i.edges})} for i in self.history(incident)]
+        except Exception:  # noqa: BLE001 - the history is optional context
+            log.exception("Could not collect the history of %s", incident.incident_id)
+            return []
 
     def _features(self, incident: Incident) -> dict | None:
         if self.data is None:
@@ -254,8 +290,9 @@ class ExplanationManager:
                     "incident": brief,
                     "evidence": [{k: e[k] for k in ("evidence_id", "source", "level", "ref", "title", "text")} for e in evidence],
                     "mitigations": mitigations[:5]}, ensure_ascii=False))
+                system = GRAPH_PROMPT if any(e["source"] == "graph" for e in evidence) else SYSTEM_PROMPT
                 try:
-                    parsed = parse_llm_json(self.client.chat(prompt), {e["evidence_id"] for e in evidence})
+                    parsed = parse_llm_json(self.client.chat(prompt, system), {e["evidence_id"] for e in evidence})
                     result = {"sentences": [{"text": redactor.reveal(s["text"]), "citations": s["citations"]}
                                             for s in parsed["sentences"]],
                               "next_steps": [redactor.reveal(s) for s in parsed["next_steps"]]}
