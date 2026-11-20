@@ -2,6 +2,7 @@
 
 - GraphSAGEDetector: Sai's 3-head GraphSAGE (binary, tactic, MITRE), with her preprocessing
   rebuilt per window from preprocessing_objects.joblib.
+- HGTDetector: Sai's hierarchical graph transformer; same graph and preprocessing, cascaded heads.
 - PrecomputedDetector: per-edge predictions exported from any model (e.g. the decision model,
   model_5, which also supplies severity).
 - HeuristicDetector: label-free stand-in so the API works before the artifacts arrive.
@@ -125,8 +126,51 @@ def _graphsage_class():
     return GraphSAGEEdgeClassifier
 
 
+def _hgt_class():
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch_geometric.nn import LayerNorm, TransformerConv
+
+    class HierarchicalGraphTransformer(nn.Module):
+        """Sai's model (hierarchical_transformer_model_training.ipynb). Its LayerNorm runs in graph mode
+        without a batch vector, so the app scores one window per call, as the replay does."""
+
+        def __init__(self, node_input_dim, edge_input_dim, hidden_dim, tactic_dim, mitre_dim, heads=4, dropout=0.35):
+            super().__init__()
+            self.dropout = dropout
+            conv = lambda d_in: TransformerConv(d_in, hidden_dim // heads, heads=heads, edge_dim=edge_input_dim,
+                                                dropout=dropout, beta=True)
+            self.conv1, self.norm1 = conv(node_input_dim), LayerNorm(hidden_dim)
+            self.conv2, self.norm2 = conv(hidden_dim), LayerNorm(hidden_dim)
+            size = hidden_dim * 2 + edge_input_dim
+            self.edge_trunk = nn.Sequential(nn.Linear(size, hidden_dim * 2), nn.LayerNorm(hidden_dim * 2), nn.GELU(),
+                                            nn.Dropout(dropout), nn.Linear(hidden_dim * 2, hidden_dim),
+                                            nn.LayerNorm(hidden_dim), nn.GELU())
+            self.binary_head = nn.Linear(hidden_dim, 1)
+            self.tactic_head = nn.Sequential(nn.Linear(hidden_dim + 1, hidden_dim), nn.GELU(), nn.Dropout(dropout),
+                                             nn.Linear(hidden_dim, tactic_dim))
+            self.mitre_head = nn.Sequential(nn.Linear(hidden_dim + tactic_dim, hidden_dim), nn.GELU(), nn.Dropout(dropout),
+                                            nn.Linear(hidden_dim, mitre_dim))
+
+        def forward(self, data):
+            x, ei, ea = data.x, data.edge_index, data.edge_attr
+            x = F.gelu(self.norm1(self.conv1(x, ei, ea)))
+            x = F.dropout(x, p=self.dropout, training=self.training)
+            x = F.gelu(self.norm2(self.conv2(x, ei, ea)))
+            h = self.edge_trunk(torch.cat([x[ei[0]], x[ei[1]], ea], dim=1))
+            b = self.binary_head(h)
+            t = self.tactic_head(torch.cat([h, torch.sigmoid(b)], 1))
+            m = self.mitre_head(torch.cat([h, torch.sigmoid(t)], 1))
+            return b.squeeze(1), t, m
+
+    return HierarchicalGraphTransformer
+
+
 class GraphSAGEDetector(Detector):
     name = "graphsage"
+    display_name = "GraphSAGE"
+    model_class = staticmethod(_graphsage_class)
 
     def __init__(self, checkpoint_path, preprocessing_path):
         import joblib
@@ -141,7 +185,7 @@ class GraphSAGEDetector(Detector):
         self.technique_classes = [str(c) for c in objects["mitre_encoder"].classes_]
 
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-        self.model = _graphsage_class()(**checkpoint["model_config"])
+        self.model = self.model_class()(**checkpoint["model_config"])
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.model.eval()
         self.threshold = float(checkpoint.get("threshold", 0.5))
@@ -151,7 +195,30 @@ class GraphSAGEDetector(Detector):
         return set(NUMERIC_EDGE_FEATURES) | set(CATEGORICAL_EDGE_FEATURES) | {
             "total_duration", "total_orig_packets", "total_missed_bytes"}
 
+    @property
+    def edge_feature_names(self) -> list[str]:
+        """Column names of data.edge_attr: scaled numeric features, then the one-hot categories."""
+        return NUMERIC_EDGE_FEATURES + [str(c) for c in self.category_encoder.get_feature_names_out(CATEGORICAL_EDGE_FEATURES)]
+
+    @property
+    def node_feature_names(self) -> list[str]:
+        return list(NODE_FEATURES)
+
     def predict(self, rows: pd.DataFrame) -> Prediction:
+        data = self.build_graph(rows)
+        torch = self.torch
+        with torch.no_grad():
+            binary, tactic, technique = self.model(data)
+        return Prediction(
+            attack_probability=torch.sigmoid(binary).numpy(),
+            tactic_classes=self.tactic_classes,
+            tactic_probs=torch.sigmoid(tactic).numpy(),
+            technique_classes=self.technique_classes,
+            technique_probs=torch.sigmoid(technique).numpy(),
+        )
+
+    def build_graph(self, rows: pd.DataFrame):
+        """One window as a PyG graph; edge i is rows.iloc[i] (the GNN explainer relies on this)."""
         from torch_geometric.data import Data
 
         torch = self.torch
@@ -173,19 +240,17 @@ class GraphSAGEDetector(Detector):
         edge_index = torch.tensor([[node_id[ip] for ip in edges["src_ip_zeek"]],
                                    [node_id[ip] for ip in edges["dest_ip_zeek"]]], dtype=torch.long)
 
-        data = Data(x=torch.tensor(node_x), edge_index=edge_index, edge_attr=torch.tensor(edge_x))
-        with torch.no_grad():
-            binary, tactic, technique = self.model(data)
-        return Prediction(
-            attack_probability=torch.sigmoid(binary).numpy(),
-            tactic_classes=self.tactic_classes,
-            tactic_probs=torch.sigmoid(tactic).numpy(),
-            technique_classes=self.technique_classes,
-            technique_probs=torch.sigmoid(technique).numpy(),
-        )
+        return Data(x=torch.tensor(node_x), edge_index=edge_index, edge_attr=torch.tensor(edge_x))
 
 
 # ---------------------------------------------------------------- precomputed
+class HGTDetector(GraphSAGEDetector):
+    """Same window graph and preprocessing as GraphSAGE (Sai trained both on it)."""
+    name = "hgt"
+    display_name = "HGT"
+    model_class = staticmethod(_hgt_class)
+
+
 class PrecomputedDetector(Detector):
     """Reads per-edge predictions.
 
@@ -286,6 +351,28 @@ class HeuristicDetector(Detector):
         return Prediction(attack, self.TACTICS, tactic, self.TECHNIQUES, technique)
 
 
+GRAPH_DETECTORS = {"graphsage": GraphSAGEDetector, "hgt": HGTDetector}
+
+
+def graph_checkpoint(settings: Settings, kind: str):
+    return settings.model_checkpoint if kind == "graphsage" else settings.hgt_checkpoint
+
+
+def load_graph_detector(settings: Settings, replay: ReplayData, kind: str) -> tuple[Detector | None, str | None]:
+    """A live graph model (GraphSAGE or HGT), or (None, why not)."""
+    cls, checkpoint = GRAPH_DETECTORS[kind], graph_checkpoint(settings, kind)
+    if not (checkpoint and settings.preprocessing_file):
+        env = "MODEL_CHECKPOINT" if kind == "graphsage" else "HGT_CHECKPOINT"
+        return None, f"{kind}: {env} or PREPROCESSING_FILE missing"
+    missing = cls.required_columns() - set(replay.frame.columns)
+    if missing:
+        return None, f"{kind}: replay data lacks {sorted(missing)}"
+    try:
+        return cls(checkpoint, settings.preprocessing_file), None
+    except Exception as exc:  # noqa: BLE001 - report and fall back
+        return None, f"{kind}: {exc}"
+
+
 def load_detector(settings: Settings, replay: ReplayData) -> Detector:
     choice = settings.primary_model
     errors = []
@@ -295,22 +382,16 @@ def load_detector(settings: Settings, replay: ReplayData) -> Detector:
             return PrecomputedDetector(settings.primary_predictions, settings.threshold)
         errors.append("precomputed: no PRIMARY_PREDICTIONS file")
 
-    def try_graphsage():
-        if not (settings.model_checkpoint and settings.preprocessing_file):
-            errors.append("graphsage: MODEL_CHECKPOINT or PREPROCESSING_FILE missing")
-            return None
-        missing = GraphSAGEDetector.required_columns() - set(replay.frame.columns)
-        if missing:
-            errors.append(f"graphsage: replay data lacks {sorted(missing)}")
-            return None
-        try:
-            return GraphSAGEDetector(settings.model_checkpoint, settings.preprocessing_file)
-        except Exception as exc:  # noqa: BLE001 - report and fall back
-            errors.append(f"graphsage: {exc}")
-            return None
+    def try_graph(kind):
+        def attempt():
+            detector, error = load_graph_detector(settings, replay, kind)
+            if error:
+                errors.append(error)
+            return detector
+        return attempt
 
-    order = {"precomputed": [try_precomputed], "graphsage": [try_graphsage],
-             "heuristic": [], "auto": [try_precomputed, try_graphsage]}.get(choice)
+    order = {"precomputed": [try_precomputed], "graphsage": [try_graph("graphsage")], "hgt": [try_graph("hgt")],
+             "heuristic": [], "auto": [try_precomputed, try_graph("graphsage")]}.get(choice)
     if order is None:
         raise ValueError(f"Unknown PRIMARY_MODEL {choice!r}")
     for attempt in order:
