@@ -16,6 +16,8 @@ The expected answer is the MITRE ATT&CK definition of the incident's ground-trut
 Outputs: eval_rag_judge.csv (one row per incident) and eval_rag_judge_summary.json.
 --judge-model picks another Groq model as the judge (default: the backend's LLM_MODEL).
 --dry-run checks the pipeline without calling any LLM.
+--retriever graph|vector picks GraphRAG (default) or the earlier vector retriever, so both can be judged on the
+same 50 incidents; outputs then go to eval_rag_judge_<retriever>.csv / _summary.json.
 """
 from __future__ import annotations
 
@@ -120,9 +122,14 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=1, help="parallel judge calls")
     parser.add_argument("--timeout", type=float, default=120, help="seconds to wait for one explanation")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--retriever", choices=["graph", "vector"], default=None,
+                        help="GraphRAG or the vector retriever (default: RETRIEVER in .env, else graph)")
     args = parser.parse_args()
     from eval_explanations import load_env
     load_env(HERE / ".env")
+    import os
+    if args.retriever:
+        os.environ["RETRIEVER"] = args.retriever
 
     import numpy as np
     import pandas as pd
@@ -159,13 +166,13 @@ def main() -> None:
     # 1) explanations, exactly as the console builds them, one incident at a time (Groq rate limits);
     #    the app's LLM call is wrapped with retries so a 429 does not fall back to the template
     if args.dry_run:
-        st.explanations.client.chat = lambda prompt: json.dumps(
+        st.explanations.client.chat = lambda prompt, system=None: json.dumps(
             {"sentences": [{"text": "The source scanned many hosts.", "citations": []},
                            {"text": "This matches the technique.", "citations": ["E1"]}], "next_steps": ["Check it."]})
         st.explanations.client.__class__.enabled = property(lambda self: True)
     else:
         original_chat = st.explanations.client.chat
-        st.explanations.client.chat = lambda prompt: retry(lambda: original_chat(prompt))
+        st.explanations.client.chat = lambda prompt, *a: retry(lambda: original_chat(prompt, *a))
     details = {}
 
     def explain(inc):
@@ -233,11 +240,14 @@ def main() -> None:
         rows = [f.result() for f in futures]
 
     out = pd.DataFrame(rows)
-    out.to_csv("eval_rag_judge.csv", index=False)
+    tag = settings.retriever if st.graph_rag is not None or settings.retriever != "graph" else "vector"
+    if args.dry_run:
+        tag += "_dryrun"          # never mistaken for real results by add_graph_rag_metrics.py
+    out.to_csv(f"eval_rag_judge_{tag}.csv", index=False)
     ok = out[out.get("error").isna()] if "error" in out else out
     metrics = ["contextual_precision", "contextual_recall", "contextual_relevancy", "faithfulness", "answer_relevancy"]
     mean = lambda g, m: round(float(g[m].dropna().mean()), 4) if m in g and g[m].notna().any() else None
-    summary = {"incidents": len(sample), "judged": len(ok), "judge_model": judge_model,
+    summary = {"retriever": tag, "incidents": len(sample), "judged": len(ok), "judge_model": judge_model,
                "generator_model": settings.llm_model,
                "explanations_by_llm": int((ok["mode"] == "llm").sum()) if "mode" in ok else 0,
                **{m: mean(ok, m) for m in metrics},
@@ -245,7 +255,7 @@ def main() -> None:
                "groundedness": mean(ok, "groundedness"),
                "when_detector_technique_right": {m: mean(ok[ok.detector_correct], m) for m in metrics},
                "when_detector_technique_wrong": {m: mean(ok[~ok.detector_correct], m) for m in metrics}}
-    Path("eval_rag_judge_summary.json").write_text(json.dumps(summary, indent=2))
+    Path(f"eval_rag_judge_{tag}_summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
 
 

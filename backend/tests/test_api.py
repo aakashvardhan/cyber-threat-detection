@@ -223,7 +223,7 @@ class FakeLLM(LLMClient):
     def enabled(self):
         return True
 
-    def chat(self, user_prompt):
+    def chat(self, user_prompt, system_prompt=None):
         self.prompts.append(user_prompt)
         return self.reply
 

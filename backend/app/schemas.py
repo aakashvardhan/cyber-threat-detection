@@ -121,8 +121,8 @@ class Edge(_Model):
 class Evidence(_Model):
     NULLABLE = frozenset({"url"})
     evidence_id: str
-    source: Literal["mitre", "cti", "procedure", "cve"]
-    level: Literal["technique", "tactic", "procedure", "cve"]
+    source: Literal["mitre", "graph", "cti", "procedure", "cve"]
+    level: Literal["technique", "tactic", "procedure", "cve", "path", "community", "history"]
     ref: str | None = None
     title: str
     text: str
@@ -151,7 +151,7 @@ class Explanation(_Model):
 
 
 class RetrievalSource(_Model):
-    source: Literal["mitre", "procedure", "cti", "cve"]
+    source: Literal["mitre", "graph", "procedure", "cti", "cve"]
     searched: int | None = None
     returned: int
     skipped: bool | None = None
@@ -173,6 +173,41 @@ class BehaviorCheck(_Model):
     agrees_with_detector: bool | None = None
 
 
+class KnowledgeGraphNode(_Model):
+    NULLABLE = frozenset({"url"})
+    id: str
+    type: str
+    name: str
+    role: Literal["seed", "tactic", "user", "next", "mitigation", "data", "community", "alternative", "history", "context"]
+    score: float
+    evidence_ids: list[str]
+    url: str | None = None
+
+
+class KnowledgeGraphEdge(_Model):
+    source: str
+    target: str
+    relation: str
+
+
+class KnowledgeGraphSize(_Model):
+    nodes: int
+    edges: int
+
+
+class KnowledgeGraphTrace(_Model):
+    """The ATT&CK subgraph GraphRAG retrieved for this incident (what the console draws)."""
+    NULLABLE = frozenset({"community"})
+    store: Literal["neo4j", "networkx"]
+    method: str
+    seeds: list[str]
+    subgraph: KnowledgeGraphSize
+    actors: int
+    community: str | None = None
+    nodes: list[KnowledgeGraphNode]
+    edges: list[KnowledgeGraphEdge]
+
+
 class RetrievalTrace(_Model):
     query: str
     sources: list[RetrievalSource]
@@ -181,6 +216,8 @@ class RetrievalTrace(_Model):
     fallback_to_tactic: bool | None = None
     latency_ms: int | None = None
     behavior_check: BehaviorCheck | None = None
+    retriever: str | None = None
+    graph: KnowledgeGraphTrace | None = None
 
 
 class Mitigation(_Model):

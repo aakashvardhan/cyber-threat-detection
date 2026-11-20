@@ -54,6 +54,12 @@ class Settings:
     embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_dir: Path | None = None
     attack_stix: Path | None = None           # enterprise-attack.json: technique documents + procedure examples
+    # GraphRAG: "graph" retrieves over the ATT&CK knowledge graph, "vector" is the earlier text retriever (baseline)
+    retriever: str = "graph"
+    neo4j_uri: str | None = None              # e.g. bolt://localhost:7687; unset = in-memory graph (NetworkX)
+    neo4j_user: str = "neo4j"
+    neo4j_password: str | None = None
+    neo4j_database: str | None = None
     behavior_check: bool = True
     gnn_explainer: bool = True               # GNNExplainer for the GraphSAGE detector (incident page)
     gnn_explainer_epochs: int = 100
@@ -115,6 +121,11 @@ class Settings:
             chroma_dir=Path(_env("CHROMA_DIR", str(data_dir / "chroma_db"))),
             attack_stix=path("ATTACK_STIX", data_dir / "knowledge" / "enterprise-attack.json",
                              DEMO_DATA / "rag" / "enterprise-attack.json"),
+            retriever=_env("RETRIEVER", "graph").lower(),
+            neo4j_uri=_env("NEO4J_URI"),
+            neo4j_user=_env("NEO4J_USER", "neo4j"),
+            neo4j_password=_env("NEO4J_PASSWORD"),
+            neo4j_database=_env("NEO4J_DATABASE"),
             behavior_check=_flag("BEHAVIOR_CHECK", True),
             gnn_explainer=_flag("GNN_EXPLAINER", True),
             gnn_explainer_epochs=int(_env("GNN_EXPLAINER_EPOCHS", "100")),
