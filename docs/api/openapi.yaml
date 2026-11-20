@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
@@ -741,8 +741,8 @@ components:
       required: [evidence_id, source, level, title, text, score]
       properties:
         evidence_id: { type: string, description: 'Referenced by `explanation.sentences[].citations`', example: E1 }
-        source: { type: string, enum: [mitre, cti, procedure, cve] }
-        level: { type: string, enum: [technique, tactic, procedure, cve], description: '`tactic` = fallback when no technique-level match was found' }
+        source: { type: string, enum: [mitre, graph, cti, procedure, cve], description: '`graph` = a fact retrieved from the ATT&CK knowledge graph (GraphRAG)' }
+        level: { type: string, enum: [technique, tactic, procedure, cve, path, community, history], description: '`tactic` = fallback when no technique-level match was found; `path` = graph relations (who uses it, what follows, defences); `community` = its technique community summary; `history` = earlier incidents from the same source joined to the graph' }
         ref: { type: string, description: 'Technique ID, report ID or CVE ID' }
         title: { type: string }
         text: { type: string }
@@ -783,7 +783,7 @@ components:
       type: object
       required: [source, returned]
       properties:
-        source: { type: string, enum: [mitre, procedure, cti, cve] }
+        source: { type: string, enum: [mitre, graph, procedure, cti, cve] }
         searched: { type: integer, description: Candidates scored }
         returned: { type: integer }
         skipped: { type: boolean, description: True when the source does not apply (e.g. no linked CVE) }
@@ -801,6 +801,51 @@ components:
         fallback_to_tactic: { type: boolean }
         latency_ms: { type: integer }
         behavior_check: { $ref: '#/components/schemas/BehaviorCheck' }
+        retriever: { type: string, enum: [graph, vector, token], description: 'graph = GraphRAG over the ATT&CK knowledge graph (default); vector / token = the text retrievers' }
+        graph: { $ref: '#/components/schemas/KnowledgeGraphTrace' }
+
+    KnowledgeGraphTrace:
+      type: object
+      description: The ATT&CK subgraph GraphRAG retrieved for this incident; the console draws it
+      required: [store, method, seeds, subgraph, actors, nodes, edges]
+      properties:
+        store: { type: string, enum: [neo4j, networkx], description: Where the graph query ran }
+        method: { type: string, example: Personalized PageRank (alpha 0.85) from the predicted technique over the ATT&CK knowledge graph }
+        seeds: { type: array, items: { type: string }, description: 'Predicted technique, the behaviour check''s alternatives when it disagrees, and techniques of earlier incidents from the same source' }
+        subgraph:
+          type: object
+          required: [nodes, edges]
+          properties:
+            nodes: { type: integer }
+            edges: { type: integer }
+        actors: { type: integer, description: Groups, software and campaigns that use the technique }
+        community: { type: string, nullable: true }
+        nodes:
+          type: array
+          items: { $ref: '#/components/schemas/KnowledgeGraphNode' }
+        edges:
+          type: array
+          items: { $ref: '#/components/schemas/KnowledgeGraphEdge' }
+
+    KnowledgeGraphNode:
+      type: object
+      required: [id, type, name, role, score, evidence_ids]
+      properties:
+        id: { type: string, example: G0007 }
+        type: { type: string, enum: [Technique, Tactic, Group, Software, Campaign, Mitigation, DataComponent, Community, Report] }
+        name: { type: string }
+        role: { type: string, enum: [seed, tactic, user, next, mitigation, data, community, alternative, history, context] }
+        score: { type: number, description: Personalized PageRank score }
+        evidence_ids: { type: array, items: { type: string }, description: Evidence items that mention this node }
+        url: { type: string, nullable: true }
+
+    KnowledgeGraphEdge:
+      type: object
+      required: [source, target, relation]
+      properties:
+        source: { type: string }
+        target: { type: string }
+        relation: { type: string, example: USES }
 
     FeatureImportance:
       type: object
