@@ -176,10 +176,13 @@ class AttackGraph:
         parents = [n for n, v in self.nodes.items() if v["type"] == "Technique" and not v.get("is_subtechnique")]
         co.add_nodes_from(parents)
         by_actor: dict[str, set[str]] = defaultdict(set)
-        for tid, actors in users.items():
-            for a in actors:
+        # sorted everywhere: set order changes between Python processes, and Louvain depends on the order of
+        # nodes and edges even with a fixed seed, so unsorted input gave slightly different communities per start
+        for tid in sorted(users):
+            for a in sorted(users[tid]):
                 by_actor[a].add(tid)
-        for actor, techs in by_actor.items():
+        for actor in sorted(by_actor):
+            techs = by_actor[actor]
             techs = sorted(techs)
             w = 1.0 / math.log2(2 + len(techs))           # an actor that uses everything says little
             for i, a in enumerate(techs):
@@ -189,7 +192,7 @@ class AttackGraph:
             data["weight"] /= math.sqrt(len(users[a]) * len(users[b]))
         # Louvain (networkx); Microsoft GraphRAG uses Leiden, a refinement of the same modularity method
         parts = nx.community.louvain_communities(co, weight="weight", seed=seed, resolution=resolution)
-        parts = sorted((p for p in parts if len(p) > 1), key=len, reverse=True)
+        parts = sorted((p for p in parts if len(p) > 1), key=lambda p: (-len(p), min(p)))
         total = len(by_actor) or 1
         for nid, node in self.nodes.items():                # how common a technique is among all actors
             if node["type"] == "Technique":
@@ -211,11 +214,12 @@ class AttackGraph:
                 self.edges.append((t, "IN_COMMUNITY", cid, {}))
 
     def _summarise(self, cid: int, members: set[str], users: dict[str, set[str]]) -> dict:
-        tactic_count = Counter(t for m in members for t in self.nodes[m].get("tactics", [])[:1])
-        top_tech = sorted(members, key=lambda m: -len(users.get(m, ())))[:5]
-        groups = Counter(a for m in members for a in users.get(m, ()) if self.nodes[a]["type"] == "Group")
-        top_groups = [self.nodes[g]["name"] for g, _ in groups.most_common(4)]
-        tactics = [t for t, _ in tactic_count.most_common(3)]
+        ordered = sorted(members)                            # ties are broken by ID, not by set order
+        tactic_count = Counter(t for m in ordered for t in self.nodes[m].get("tactics", [])[:1])
+        top_tech = sorted(ordered, key=lambda m: (-len(users.get(m, ())), m))[:5]
+        groups = Counter(a for m in ordered for a in sorted(users.get(m, ())) if self.nodes[a]["type"] == "Group")
+        top_groups = [self.nodes[g]["name"] for g, _ in sorted(groups.items(), key=lambda kv: (-kv[1], kv[0]))[:4]]
+        tactics = [t for t, _ in sorted(tactic_count.items(), key=lambda kv: (-kv[1], kv[0]))[:3]]
         summary = (f"A cluster of {len(members)} techniques that the same actors tend to use together, mostly "
                    f"{', '.join(tactics)}. Its most used techniques are "
                    + ", ".join(f"{t} {self.nodes[t]['name']}" for t in top_tech)
@@ -231,6 +235,15 @@ class AttackGraph:
             if rel == "USES" and self.nodes.get(t, {}).get("type") == "Technique" and self.nodes[s]["type"] in ACTOR_TYPES:
                 out[self.nodes[t]["parent"]].add(s)
         return out
+
+    def signature(self) -> str:
+        """Changes when the STIX file, the CTI spans or the build code change the graph."""
+        import hashlib
+        h = hashlib.sha1()
+        for s, rel, t, _ in sorted(self.edges, key=lambda e: (e[0], e[1], e[2])):
+            h.update(f"{s}|{rel}|{t};".encode())
+        h.update(str(sorted(self.communities)).encode())
+        return h.hexdigest()
 
     def stats(self) -> dict:
         types = Counter(v["type"] for v in self.nodes.values())
@@ -317,6 +330,43 @@ class NetworkXStore:
         return out
 
 
+NEO4J_LABELS = {"Technique", "Tactic", "Group", "Software", "Campaign", "Mitigation", "DetectionStrategy",
+                "DataComponent", "Report", "Community"}
+
+
+def load_into_neo4j(session, graph: AttackGraph, batch: int = 1000) -> dict:
+    """Replace the ATT&CK graph in Neo4j. Every node is :Entity plus its type; a :GraphMeta node keeps the signature."""
+    session.run("CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE").consume()
+    session.run("CREATE INDEX technique_parent IF NOT EXISTS FOR (x:Technique) ON (x.parent)").consume()
+    while session.run("MATCH (e:Entity) WITH e LIMIT 5000 DETACH DELETE e RETURN count(*) AS deleted").single()["deleted"]:
+        pass
+    by_type: dict[str, list[dict]] = defaultdict(list)
+    for node in graph.nodes.values():
+        props = {k: v for k, v in node.items() if v is not None and not isinstance(v, dict)}
+        by_type[node["type"]].append({"id": node["id"], "props": props})
+    for label, rows in by_type.items():
+        if label not in NEO4J_LABELS:
+            raise ValueError(f"unexpected node type {label}")
+        for i in range(0, len(rows), batch):
+            session.run(f"UNWIND $rows AS row MERGE (e:Entity {{id: row.id}}) SET e += row.props, e:{label}",
+                        rows=rows[i:i + batch]).consume()
+    by_rel: dict[str, list[dict]] = defaultdict(list)
+    for s, rel, t, props in graph.edges:
+        by_rel[rel].append({"s": s, "t": t, "props": {k: (json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v)
+                                                      for k, v in (props or {}).items()}})
+    for rel, rows in by_rel.items():
+        if not rel.replace("_", "").isalnum():
+            raise ValueError(f"unexpected relationship type {rel}")
+        for i in range(0, len(rows), batch):
+            session.run(f"UNWIND $rows AS row MATCH (a:Entity {{id: row.s}}) MATCH (b:Entity {{id: row.t}}) "
+                        f"MERGE (a)-[r:{rel}]->(b) SET r += row.props", rows=rows[i:i + batch]).consume()
+    session.run("MERGE (m:GraphMeta {name: 'attack'}) SET m.signature = $sig, m.loaded_at = datetime()",
+                sig=graph.signature()).consume()
+    nodes = session.run("MATCH (e:Entity) RETURN count(e) AS total").single()["total"]
+    rels = session.run("MATCH (:Entity)-[r]->(:Entity) RETURN count(r) AS total").single()["total"]
+    return {"nodes": nodes, "relationships": rels}
+
+
 class Neo4jStore:
     """The same graph in Neo4j (load it with scripts/load_neo4j.py). Retrieval runs the Cypher below."""
     name = "neo4j"
@@ -342,13 +392,30 @@ class Neo4jStore:
         self.database = database
 
     @classmethod
-    def connect(cls, uri: str, user: str, password: str, database: str | None = None) -> "Neo4jStore":
+    def connect(cls, uri: str, user: str, password: str, database: str | None = None,
+                graph: AttackGraph | None = None, retries: int = 10) -> "Neo4jStore":
+        """Connect; with `graph`, (re)load it when Neo4j is empty or holds an older graph."""
+        import time as _time
         from neo4j import GraphDatabase
 
         driver = GraphDatabase.driver(uri, auth=(user, password))
-        driver.verify_connectivity()
+        for attempt in range(retries):          # in docker compose Neo4j may still be starting
+            try:
+                driver.verify_connectivity()
+                break
+            except Exception:  # noqa: BLE001
+                if attempt == retries - 1:
+                    raise
+                _time.sleep(3)
         store = cls(driver, database)
-        if not store._run("MATCH (x:Technique) RETURN count(x) AS techniques")[0]["techniques"]:
+        rows = store._run("OPTIONAL MATCH (m:GraphMeta {name: 'attack'}) RETURN m.signature AS sig")
+        current = rows[0]["sig"] if rows else None
+        if graph is not None and current != graph.signature():
+            log.info("Loading the ATT&CK graph into Neo4j (%s)", "first load" if current is None else "graph changed")
+            with driver.session(database=database) as session:
+                counts = load_into_neo4j(session, graph)
+            log.info("Neo4j now holds %s", counts)
+        elif not store._run("MATCH (x:Technique) RETURN count(x) AS techniques")[0]["techniques"]:
             raise RuntimeError("Neo4j is reachable but has no ATT&CK graph; run scripts/load_neo4j.py")
         return store
 

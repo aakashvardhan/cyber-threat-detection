@@ -364,3 +364,20 @@ td.worse { color: var(--sev-medium); }
 .kg-legend li { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .kg-legend li span { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 @media (max-width: 1100px) { .kg { grid-template-columns: 1fr; } }
+
+/* Incident chat */
+.chat { display: flex; flex-direction: column; gap: 12px; }
+.chat-empty { display: flex; flex-direction: column; gap: 10px; }
+.chat-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.chat-suggestions .btn { text-align: left; }
+.chat-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; }
+.chat-log:empty { display: none; }
+.chat-msg { max-width: 88%; padding: 10px 14px; border-radius: var(--r-card); line-height: 1.5; }
+.chat-msg p { margin: 0 0 6px; }
+.chat-user { align-self: flex-end; background: var(--raised); border: 1px solid var(--border); white-space: pre-wrap; }
+.chat-assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--border-soft); }
+.chat-sources { margin-top: 4px; }
+.chat-sources summary { cursor: pointer; }
+.chat-sources .evidence { margin-top: 8px; }
+.chat-form { display: flex; gap: 8px; }
+@media (max-width: 640px) { .chat-msg { max-width: 100%; } }

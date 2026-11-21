@@ -5,6 +5,7 @@ import { ErrorNote, SeverityChip } from '../components/badges.jsx';
 import EvidenceFunnel from '../components/EvidenceFunnel.jsx';
 import WindowGraph from '../components/WindowGraph.jsx';
 import KnowledgeGraph from '../components/KnowledgeGraph.jsx';
+import IncidentChat from '../components/IncidentChat.jsx';
 import { WarnTriangle } from '../components/icons.jsx';
 import { useReplay } from '../state/ReplayContext.jsx';
 import { bytes, dateTime, hhmm, num, pct, plural, prob, service, shortDate, timeSpan } from '../utils/format.js';
@@ -247,6 +248,7 @@ function Triage({ inc, model: primaryModel, saving, onRegenerate, onUseTechnique
           <TrafficSummary edges={inc.edges} />
         </div>
       </div>
+      <IncidentChat incidentId={inc.incident_id} />
       <KnowledgeGraph trace={inc.retrieval_trace} active={active} evidenceNo={evidenceNo} />
       <WindowGraph inc={inc} explained={mx?.status === 'ready' ? mx : null} />
       <EdgesTable edges={inc.edges} />

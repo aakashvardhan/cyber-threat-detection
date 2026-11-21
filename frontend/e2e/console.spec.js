@@ -229,7 +229,28 @@ test('14. Knowledge base lists the predicted techniques and opens one', async ({
   await expect(detail).toContainText('Mitigations');
 });
 
-test('15. Switching the live model resets detection', async ({ page, request }) => {
+test('15. Incident chat answers a follow-up question with sources', async ({ page, request }) => {
+  const list = await api(request, 'GET', '/incidents');
+  const id = list.incidents[0].incident_id;
+  const probe = await request.get(`${API}/incidents/${id}/chat`, { headers: { 'X-API-Key': KEY } });
+  test.skip(!probe.ok(), 'backend without incident chat (API < 0.7.0)');
+  await api(request, 'DELETE', `/incidents/${id}/chat`);
+  await page.goto(`/incidents/${id}`);
+  const chat = page.getByRole('region', { name: 'Ask about this incident' });
+  await chat.getByRole('button', { name: /Which groups use this technique/ }).click();
+  await expect(chat.locator('.chat-user')).toContainText('Which groups use this technique');
+  await expect(chat.locator('.chat-assistant')).toBeVisible({ timeout: 30_000 });
+  await expect(chat.locator('.chat-assistant .cite').first()).toBeVisible();
+  await chat.getByLabel('Question').fill('How do I mitigate it?');
+  await chat.getByRole('button', { name: 'Ask' }).click();
+  await expect(chat.locator('.chat-assistant')).toHaveCount(2, { timeout: 30_000 });
+  await page.reload();                                                   // the conversation is kept by the backend
+  await expect(chat.locator('.chat-user')).toHaveCount(2);
+  await chat.getByRole('button', { name: 'Clear' }).click();
+  await expect(chat.locator('.chat-user')).toHaveCount(0);
+});
+
+test('16. Switching the live model resets detection', async ({ page, request }) => {
   const models = await api(request, 'GET', '/models');
   const other = models.models.find((m) => m.live && m.available && !m.active);
   test.skip(!other, 'only one live model installed');

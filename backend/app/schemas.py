@@ -208,6 +208,13 @@ class KnowledgeGraphTrace(_Model):
     edges: list[KnowledgeGraphEdge]
 
 
+class RerankTrace(_Model):
+    model: str
+    candidates: int
+    order_changed: bool
+    latency_ms: int
+
+
 class RetrievalTrace(_Model):
     query: str
     sources: list[RetrievalSource]
@@ -218,6 +225,7 @@ class RetrievalTrace(_Model):
     behavior_check: BehaviorCheck | None = None
     retriever: str | None = None
     graph: KnowledgeGraphTrace | None = None
+    rerank: RerankTrace | None = None
 
 
 class Mitigation(_Model):
@@ -260,6 +268,33 @@ class IncidentDetail(IncidentSummary):
     related_incident_ids: list[str]
     models: list[ModelOutput]
     activity: list[ActivityEntry] = Field(default_factory=list)
+
+
+class ChatRequest(_Model):
+    message: str = Field(min_length=1, max_length=1000)
+
+
+class ChatMessage(_Model):
+    NULLABLE = frozenset()
+    role: Literal["user", "assistant"]
+    text: str
+    at: str
+    sentences: list[Sentence] | None = None
+    evidence: list[Evidence] | None = None
+    query: str | None = None
+    technique_asked: str | None = None
+    mode: Literal["llm", "evidence"] | None = None
+    model: str | None = None
+    message: str | None = None
+    retriever: str | None = None
+    rerank: RerankTrace | None = None
+    latency_ms: int | None = None
+
+
+class ChatThread(_Model):
+    incident_id: str
+    llm_enabled: bool
+    messages: list[ChatMessage]
 
 
 class IncidentUpdate(_Model):

@@ -1,12 +1,13 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
     - Detection runs live as the browser replays the test traffic window by window (`POST /detect`).
     - RAG + LLM run the first time an incident is opened, then the result is cached (`GET /incidents/{id}`).
+    - Follow-up questions about an incident are answered from fresh retrieval with citations (`/incidents/{id}/chat`).
     - Evaluation and knowledge-base numbers are computed offline (`GET /metrics`).
     - Filtering, sorting, charts and reports run in the browser, so no other endpoints are needed.
 
@@ -332,6 +333,76 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+
+  /incidents/{incident_id}/chat:
+    parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema:
+          type: string
+          example: INC-0101
+    get:
+      tags: [Incidents]
+      operationId: getIncidentChat
+      summary: The incident's conversation (oldest first)
+      responses:
+        '200':
+          description: Conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThread' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: No incident with this ID
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      tags: [Incidents]
+      operationId: askIncidentChat
+      summary: Ask a follow-up question about the incident
+      description: |
+        The LLM rewrites the question into a standalone search query (using the recent conversation) and may name
+        another technique the analyst asks about; GraphRAG retrieves evidence for that query (the named technique is
+        added as an alternative; the reranker orders the text evidence by the question); the LLM answers from the
+        incident, its explanation, the conversation and the numbered evidence, with citations. Synchronous (a few
+        seconds with Groq). Without an LLM the answer lists the most related evidence (`mode = evidence`).
+        The conversation keeps the last 20 messages and is saved with the incident state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+            example: { message: 'Which groups use this technique, and what do they do next?' }
+      responses:
+        '200':
+          description: The conversation with the new question and answer at the end
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThread' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: No incident with this ID
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Incidents]
+      operationId: clearIncidentChat
+      summary: Clear the incident's conversation
+      responses:
+        '200':
+          description: Empty conversation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThread' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: No incident with this ID
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /incidents/{incident_id}/graph:
     parameters:
@@ -803,6 +874,19 @@ components:
         behavior_check: { $ref: '#/components/schemas/BehaviorCheck' }
         retriever: { type: string, enum: [graph, vector, token], description: 'graph = GraphRAG over the ATT&CK knowledge graph (default); vector / token = the text retrievers' }
         graph: { $ref: '#/components/schemas/KnowledgeGraphTrace' }
+        rerank:
+          allOf: [{ $ref: '#/components/schemas/RerankTrace' }]
+          nullable: true
+          description: Set when a cross-encoder reordered the text evidence (procedure examples, CTI spans)
+
+    RerankTrace:
+      type: object
+      required: [model, candidates, order_changed, latency_ms]
+      properties:
+        model: { type: string, example: cross-encoder/ms-marco-MiniLM-L-6-v2 }
+        candidates: { type: integer, description: First-stage candidates rescored by the cross-encoder }
+        order_changed: { type: boolean, description: Whether reranking changed their order }
+        latency_ms: { type: integer }
 
     KnowledgeGraphTrace:
       type: object
@@ -1038,6 +1122,46 @@ components:
               type: array
               description: Only present when the PATCH endpoint is built
               items: { $ref: '#/components/schemas/ActivityEntry' }
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 1000 }
+
+    ChatMessage:
+      type: object
+      required: [role, text, at]
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        text: { type: string, description: The question, or the answer's sentences joined }
+        at: { type: string, format: date-time }
+        sentences:
+          type: array
+          items: { $ref: '#/components/schemas/Sentence' }
+          description: Assistant only; each sentence with the evidence IDs it cites
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/Evidence' }
+          description: Assistant only; the cited evidence (IDs are local to this answer)
+        query: { type: string, description: Assistant only; the rewritten search query }
+        technique_asked: { type: string, description: Assistant only; another technique the question asked about }
+        mode: { type: string, enum: [llm, evidence] }
+        model: { type: string }
+        message: { type: string, description: Why the answer is evidence-only, if it is }
+        retriever: { type: string, enum: [graph, vector, token] }
+        rerank: { $ref: '#/components/schemas/RerankTrace' }
+        latency_ms: { type: integer }
+
+    ChatThread:
+      type: object
+      required: [incident_id, llm_enabled, messages]
+      properties:
+        incident_id: { type: string }
+        llm_enabled: { type: boolean, description: False = answers list evidence only (LLM_PROVIDER=none) }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/ChatMessage' }
 
     IncidentUpdate:
       type: object

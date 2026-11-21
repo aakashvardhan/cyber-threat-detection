@@ -13,3 +13,9 @@ __pycache__/
 # Airflow
 logs/
 plugins/
+
+# Local data: checkpoints, test data, knowledge files (not in Git)
+backend/data/
+backend/eval_*.csv
+backend/eval_*.json
+backend/.eval_cache/

@@ -18,6 +18,13 @@ Outputs: eval_rag_judge.csv (one row per incident) and eval_rag_judge_summary.js
 --dry-run checks the pipeline without calling any LLM.
 --retriever graph|vector picks GraphRAG (default) or the earlier vector retriever, so both can be judged on the
 same 50 incidents; outputs then go to eval_rag_judge_<retriever>.csv / _summary.json.
+LLM answers (explanations and verdicts) are cached in .eval_cache/llm_cache.sqlite: a rerun with the same inputs
+makes no API calls, and after a change (e.g. reranking) only the incidents whose prompts changed are sent again.
+--cache PATH uses another cache file, --no-cache always calls the APIs.
+--rerank on|off turns the cross-encoder reranker on or off (default: RERANK in .env, else on); with it on the outputs
+are eval_rag_judge_<retriever>_rerank.*, so the two runs can be compared on the same incidents:
+    python scripts/eval_rag_judge.py --rerank off
+    python scripts/eval_rag_judge.py --rerank on        # only incidents whose evidence order changed call the LLM
 """
 from __future__ import annotations
 
@@ -69,6 +76,9 @@ def retry(fn, tries: int = 8):
             time.sleep(wait)
 
 
+CACHE = None   # LLMCache, set in main()
+
+
 def judge_call(settings, model: str, user: str) -> dict:
     import requests
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {settings.llm_api_key}"}
@@ -84,7 +94,9 @@ def judge_call(settings, model: str, user: str) -> dict:
         r.raise_for_status()
         text = r.json()["choices"][0]["message"]["content"] or ""
         return json.loads(text[text.find("{"): text.rfind("}") + 1])
-    return retry(call)
+    if CACHE is None:
+        return retry(call)
+    return CACHE.cached("judge", model, JUDGE_PROMPT, user, lambda: retry(call), {"temperature": 0})
 
 
 def yes(v) -> bool:
@@ -124,12 +136,20 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--retriever", choices=["graph", "vector"], default=None,
                         help="GraphRAG or the vector retriever (default: RETRIEVER in .env, else graph)")
+    parser.add_argument("--cache", default=str(HERE / ".eval_cache" / "llm_cache.sqlite"), help="LLM answer cache file")
+    parser.add_argument("--no-cache", action="store_true", help="always call the LLM APIs")
+    parser.add_argument("--rerank", choices=["on", "off"], default=None, help="cross-encoder reranking of the evidence")
     args = parser.parse_args()
+    global CACHE
+    from llm_cache import LLMCache
+    CACHE = LLMCache(None if args.no_cache or args.dry_run else args.cache)
     from eval_explanations import load_env
     load_env(HERE / ".env")
     import os
     if args.retriever:
         os.environ["RETRIEVER"] = args.retriever
+    if args.rerank:
+        os.environ["RERANK"] = "true" if args.rerank == "on" else "false"
 
     import numpy as np
     import pandas as pd
@@ -139,6 +159,9 @@ def main() -> None:
     app = create_app()
     st = app.state.app_state
     settings, kb, data = st.settings, st.kb, st.replay_data
+    reranker = getattr(st.graph_rag, "reranker", None)
+    if args.rerank == "on" and reranker is None:
+        sys.exit("--rerank on, but the reranker could not be loaded (see the warning above; RERANK_MODEL)")
     if not args.dry_run and not st.explanations.client.enabled:
         sys.exit("No LLM configured in backend/.env (GROQ_API_KEY or LLM_*). Use --dry-run to test the pipeline.")
     judge_model = args.judge_model or ("openai/gpt-oss-120b" if settings.llm_provider == "groq" else settings.llm_model)
@@ -172,7 +195,14 @@ def main() -> None:
         st.explanations.client.__class__.enabled = property(lambda self: True)
     else:
         original_chat = st.explanations.client.chat
-        st.explanations.client.chat = lambda prompt, *a: retry(lambda: original_chat(prompt, *a))
+        from app.explain import SYSTEM_PROMPT
+
+        def cached_chat(prompt, system=SYSTEM_PROMPT):
+            # same prompt -> same stored explanation, so judged results stay comparable across reruns
+            return CACHE.cached("generator", settings.llm_model, system, prompt,
+                                lambda: retry(lambda: original_chat(prompt, system)),
+                                {"temperature": 0.2, "max_tokens": settings.llm_max_tokens})
+        st.explanations.client.chat = cached_chat
     details = {}
 
     def explain(inc):
@@ -241,18 +271,21 @@ def main() -> None:
 
     out = pd.DataFrame(rows)
     tag = settings.retriever if st.graph_rag is not None or settings.retriever != "graph" else "vector"
+    if reranker is not None:
+        tag += "_rerank"
     if args.dry_run:
         tag += "_dryrun"          # never mistaken for real results by add_graph_rag_metrics.py
     out.to_csv(f"eval_rag_judge_{tag}.csv", index=False)
     ok = out[out.get("error").isna()] if "error" in out else out
     metrics = ["contextual_precision", "contextual_recall", "contextual_relevancy", "faithfulness", "answer_relevancy"]
     mean = lambda g, m: round(float(g[m].dropna().mean()), 4) if m in g and g[m].notna().any() else None
-    summary = {"retriever": tag, "incidents": len(sample), "judged": len(ok), "judge_model": judge_model,
+    summary = {"retriever": tag, "rerank_model": reranker.name if reranker else None, "incidents": len(sample), "judged": len(ok), "judge_model": judge_model,
                "generator_model": settings.llm_model,
                "explanations_by_llm": int((ok["mode"] == "llm").sum()) if "mode" in ok else 0,
                **{m: mean(ok, m) for m in metrics},
                "unsupported_claims_per_explanation": round(float(ok["unsupported_claims"].mean()), 2) if len(ok) else None,
                "groundedness": mean(ok, "groundedness"),
+               "llm_cache": CACHE.stats(),
                "when_detector_technique_right": {m: mean(ok[ok.detector_correct], m) for m in metrics},
                "when_detector_technique_wrong": {m: mean(ok[~ok.detector_correct], m) for m in metrics}}
     Path(f"eval_rag_judge_{tag}_summary.json").write_text(json.dumps(summary, indent=2))
