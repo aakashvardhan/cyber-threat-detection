@@ -61,6 +61,8 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       CHROMA_HOST: chroma
       CHROMA_PORT: "8000"
+      INCIDENT_STORE: dynamodb
+      DYNAMODB_TABLE: threat-console-incidents
       DYNAMODB_ENDPOINT: http://dynamodb:8000
       AWS_REGION: ${AWS_REGION:-us-west-2}
       AWS_ACCESS_KEY_ID: local          # DynamoDB Local accepts any key; on AWS the instance role is used

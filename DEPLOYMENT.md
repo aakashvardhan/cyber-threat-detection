@@ -10,7 +10,7 @@ How the app runs in containers, locally and on AWS. Local setup: Jane (SJSU-130,
 | `backend` | `backend/Dockerfile` (FastAPI, GraphSAGE/HGT on CPU, GraphRAG) | 8000 | — (reads `backend/data`) |
 | `neo4j` | `neo4j:5-community` | 7474 (browser), 7687 (Bolt) | ATT&CK knowledge graph (GraphRAG) |
 | `chroma` | `infra/chroma/Dockerfile` | 8001 | Vector index of CTI / procedure / CVE text |
-| `dynamodb` | `amazon/dynamodb-local` | 8002 | Incidents and analyst edits (SJSU-131) |
+| `dynamodb` | `amazon/dynamodb-local` | 8002 | Analyst edits and cached explanations per incident (SJSU-131) |
 
 The backend loads the ATT&CK graph into Neo4j on start when Neo4j is empty or holds an older graph, and builds the
 Chroma index on its first start (about 10 minutes on a laptop CPU; reused afterwards). If Neo4j or Chroma cannot be
@@ -46,6 +46,25 @@ Requirements: Docker Desktop (Windows: with WSL 2), about 8 GB of free RAM for D
 Stop with `docker compose down` (data in the named volumes stays); `docker compose down -v` also deletes the
 Neo4j, Chroma and DynamoDB volumes.
 
+## Incident state (DynamoDB)
+
+Incidents come from the replay in a fixed order, so each live model always produces the same incident IDs. The
+backend stores what is added on top of them in one table, `threat-console-incidents`:
+
+| Key / attribute | Type | |
+|---|---|---|
+| `model` | partition key (S) | live model: `graphsage` or `hgt` |
+| `incident_id` | sort key (S) | e.g. `INC-0042` |
+| `status`, `technique_override` | S | analyst edits |
+| `mitigations_applied`, `activity` | S (JSON) | applied mitigations, activity log with notes |
+| `explanation`, `evidence`, `retrieval_trace`, `cve_status` | S (JSON / S) | cached explanation, so the LLM is not called again |
+| `updated_at` | S | last write (UTC) |
+
+On-demand billing; items are a few KB to a few tens of KB. When the replay creates an incident, the saved state is put
+back, so edits and explanations survive a restart, a Reset in the console and a redeploy. If DynamoDB cannot be
+reached, the backend logs a warning and keeps the state in memory. `python scripts/create_tables.py` creates the table;
+`--clear` removes saved state (e.g. before a clean demo).
+
 ## Environment variables
 
 Compose reads `.env` in the repository root (see `.env.example`):
@@ -69,8 +88,11 @@ What the app needs; the choices are Shriansh's:
   takes about 75–90 ms per window on 2 vCPU. Install Docker and the compose plugin, clone `main`, then the steps above.
 - **Data**: keep `backend/data` in an S3 bucket and sync it on the instance before starting
   (`aws s3 sync s3://<bucket>/backend-data backend/data`); the instance role needs `s3:GetObject` / `s3:ListBucket`.
-- **DynamoDB**: real tables instead of DynamoDB Local (SJSU-131 adds the table script); remove `DYNAMODB_ENDPOINT`
-  and the dummy keys from the backend environment so it uses the instance role.
+- **DynamoDB**: create the table above (`python scripts/create_tables.py` with AWS credentials, or the console:
+  table `threat-console-incidents`, partition key `model` (String), sort key `incident_id` (String), on-demand).
+  In the backend environment keep `INCIDENT_STORE=dynamodb`, remove `DYNAMODB_ENDPOINT` and the dummy keys so it uses
+  the instance role, and set `DYNAMODB_CREATE_TABLE=false` if the role cannot create tables. The role needs
+  `dynamodb:DescribeTable`, `GetItem`, `Query`, `UpdateItem` (and `Scan`, `BatchWriteItem` for `--clear`) on that table.
 - **Secrets**: `GROQ_API_KEY`, `API_KEY` and `NEO4J_PASSWORD` from Secrets Manager or SSM, written to `.env` at boot.
 - **Network**: open 80/443 (frontend) and the API port to users; keep 7474/7687 (Neo4j), 8001 (Chroma) and 8002
   (DynamoDB Local) closed to the internet. Set `PUBLIC_API_URL` to the public API address and add the console's

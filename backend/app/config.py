@@ -63,6 +63,12 @@ class Settings:
     neo4j_password: str | None = None
     neo4j_database: str | None = None
     neo4j_autoload: bool = True               # load the ATT&CK graph into Neo4j when it is empty or out of date
+    # incident state that survives a restart (SJSU-131): memory | dynamodb
+    incident_store: str = "memory"
+    dynamodb_table: str = "threat-console-incidents"
+    dynamodb_endpoint: str | None = None      # DynamoDB Local (docker compose); unset = the AWS service
+    aws_region: str = "us-west-2"
+    dynamodb_create_table: bool = True        # create the table when it is missing (set false on AWS if IAM forbids it)
     behavior_check: bool = True
     gnn_explainer: bool = True               # GNNExplainer for the GraphSAGE detector (incident page)
     gnn_explainer_epochs: int = 100
@@ -132,6 +138,11 @@ class Settings:
             neo4j_password=_env("NEO4J_PASSWORD"),
             neo4j_database=_env("NEO4J_DATABASE"),
             neo4j_autoload=_flag("NEO4J_AUTOLOAD", True),
+            incident_store=_env("INCIDENT_STORE", "memory").lower(),
+            dynamodb_table=_env("DYNAMODB_TABLE", "threat-console-incidents"),
+            dynamodb_endpoint=_env("DYNAMODB_ENDPOINT"),
+            aws_region=_env("AWS_REGION", _env("AWS_DEFAULT_REGION", "us-west-2")),
+            dynamodb_create_table=_flag("DYNAMODB_CREATE_TABLE", True),
             behavior_check=_flag("BEHAVIOR_CHECK", True),
             gnn_explainer=_flag("GNN_EXPLAINER", True),
             gnn_explainer_epochs=int(_env("GNN_EXPLAINER_EPOCHS", "100")),

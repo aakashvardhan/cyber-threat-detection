@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from app.detectors import Detector, Prediction
+from app.store import apply_state
 from app.knowledge import KnowledgeBase
 from app.replay_data import ReplayData
 from app.timeutil import iso
@@ -109,7 +110,8 @@ class WindowResult:
 
 
 class ReplayState:
-    def __init__(self, data: ReplayData, detector: Detector, gap_minutes: int):
+    def __init__(self, data: ReplayData, detector: Detector, gap_minutes: int, saved: dict | None = None):
+        self.saved = saved or {}      # analyst edits and explanations kept in the incident store
         self.data = data
         self.detector = detector
         self.gap = pd.Timedelta(minutes=gap_minutes)
@@ -170,6 +172,7 @@ class ReplayState:
             else:
                 self.counter += 1
                 incident = Incident(f"INC-{self.counter:04d}", edge.source_ip, top, [edge])
+                apply_state(incident, self.saved.get(incident.incident_id))
                 self.incidents[incident.incident_id] = incident
                 self.open_by_key[key] = incident.incident_id
                 new_ids.append(incident.incident_id)
@@ -190,10 +193,14 @@ def timedelta_ok(delta: pd.Timedelta, gap: pd.Timedelta) -> bool:
 class ReplayController:
     """Thread-safe front for POST /detect: idempotent windows, atomic reset."""
 
-    def __init__(self, data: ReplayData, detector: Detector, gap_minutes: int):
+    def __init__(self, data: ReplayData, detector: Detector, gap_minutes: int, store=None):
         self.data, self.detector, self.gap_minutes = data, detector, gap_minutes
-        self.state = ReplayState(data, detector, gap_minutes)
+        self.store = store
+        self.state = ReplayState(data, detector, gap_minutes, self._saved())
         self.lock = threading.Lock()
+
+    def _saved(self) -> dict:
+        return self.store.load_all(self.detector.name) if self.store is not None else {}
 
     def detect(self, window_start=None, reset: bool = False) -> dict:
         with self.lock:
@@ -207,7 +214,7 @@ class ReplayController:
                 window = None
 
             if reset:
-                fresh = ReplayState(self.data, self.detector, self.gap_minutes)
+                fresh = ReplayState(self.data, self.detector, self.gap_minutes, self._saved())
                 target = window or self.data.windows[0]
                 fresh.process(target)          # raises before the swap if processing fails
                 self.state = fresh

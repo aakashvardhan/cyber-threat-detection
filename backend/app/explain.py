@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 from app.behavior import BehaviorSearch, event_fields, incident_features
+from app.store import explanation_state
 from app.config import Settings
 from app.incidents import Incident
 from app.knowledge import KnowledgeBase
@@ -214,6 +215,8 @@ class ExplanationManager:
         self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="explain")
         self.lock = threading.Lock()
         self.running: set[str] = set()
+        self.store = None            # incident store: ready explanations are saved there
+        self.model_name = lambda: None
 
     def view(self, incident: Incident, refresh: bool = False) -> dict:
         """Current explanation for the incident; starts a job on the first call or on refresh."""
@@ -314,6 +317,9 @@ class ExplanationManager:
             incident.explanation = {**incident.explanation, **update}
             incident.explanation.pop("started_at", None)
             self.running.discard(incident.incident_id)
+            ready = incident.explanation.get("status") == "ready"
+        if ready and self.store is not None and self.model_name():
+            self.store.save(self.model_name(), incident.incident_id, explanation_state(incident))
 
     def wait_idle(self, timeout: float = 10.0) -> None:
         """Test helper: block until no explanation job is running."""

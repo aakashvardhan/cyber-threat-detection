@@ -20,6 +20,10 @@ nltk>=3.8
 networkx>=3.2
 neo4j>=5.20
 
+# Incident store (DynamoDB; DynamoDB Local in docker compose) and its test double
+boto3>=1.34
+moto[dynamodb]>=5.0
+
 # tests
 pytest>=8.0
 httpx>=0.27
