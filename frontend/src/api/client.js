@@ -1,4 +1,4 @@
-// Thin client for the analyst console API (docs/api/openapi.yaml, v0.5.0).
+// Thin client for the analyst console API (docs/api/openapi.yaml, v0.7.0).
 // Base URL and key come from .env.local (see .env.example).
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -62,6 +62,11 @@ export const api = {
     request('GET', `/incidents/${encodeURIComponent(id)}/graph${windowStart ? `?window_start=${encodeURIComponent(windowStart)}` : ''}`),
   /** Status, technique override, note, mitigations applied. */
   updateIncident: (id, update) => request('PATCH', `/incidents/${encodeURIComponent(id)}`, update),
+  /** The incident's follow-up conversation. */
+  incidentChat: (id) => request('GET', `/incidents/${encodeURIComponent(id)}/chat`),
+  /** Ask a follow-up question; returns the whole conversation with the answer at the end (a few seconds). */
+  askIncidentChat: (id, message) => request('POST', `/incidents/${encodeURIComponent(id)}/chat`, { message }),
+  clearIncidentChat: (id) => request('DELETE', `/incidents/${encodeURIComponent(id)}/chat`),
   metrics: () => request('GET', '/metrics'),
   /** Live models (GraphSAGE, HGT) and offline ones (LLMs). */
   models: () => request('GET', '/models'),

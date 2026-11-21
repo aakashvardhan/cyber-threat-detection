@@ -4,6 +4,8 @@ Incidents come from the replay in a fixed order, so the same live model always p
 What must survive a restart is what people and the LLM added on top: the analyst's status, technique override,
 mitigations and activity log, and the cached explanation with its evidence. Those are kept per (model, incident).
 
+Also kept: the incident chat (app.chat), so a conversation continues after a restart.
+
   MemoryStore    default; lost on restart (tests, quick local runs)
   DynamoStore    one DynamoDB table: partition key `model`, sort key `incident_id`; DynamoDB Local in docker compose,
                  the real service on AWS (same code, only DYNAMODB_ENDPOINT differs)
@@ -21,7 +23,7 @@ log = logging.getLogger(__name__)
 
 ANALYST_FIELDS = ("status", "technique_override", "mitigations_applied", "activity")
 EXPLANATION_FIELDS = ("explanation", "evidence", "retrieval_trace", "cve_status")
-JSON_FIELDS = ("activity", "explanation", "evidence", "retrieval_trace", "mitigations_applied")
+JSON_FIELDS = ("activity", "explanation", "evidence", "retrieval_trace", "mitigations_applied", "chat")
 
 
 def _now() -> str:
@@ -42,7 +44,7 @@ def apply_state(incident, saved: dict | None) -> None:
     """Put saved fields back on a freshly created incident."""
     if not saved:
         return
-    for name in ANALYST_FIELDS:
+    for name in (*ANALYST_FIELDS, "chat"):
         if name in saved and saved[name] is not None:
             setattr(incident, name, saved[name])
     if (saved.get("explanation") or {}).get("status") == "ready":

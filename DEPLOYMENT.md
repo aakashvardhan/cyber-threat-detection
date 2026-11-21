@@ -77,6 +77,7 @@ Compose reads `.env` in the repository root (see `.env.example`):
 | `GROQ_API_KEY` | empty | Keep it out of Git; on AWS use Secrets Manager or SSM Parameter Store |
 | `PUBLIC_API_URL` | `http://localhost:8000` | Where the browser reaches the API; baked into the frontend at build time |
 | `AWS_REGION` | `us-west-2` | Region for DynamoDB |
+| `RERANK` | `true` | Cross-encoder reranking of the evidence; `false` turns it off (no rebuild needed) |
 
 The backend's other settings (`backend/.env.example`) can be added under `backend: environment:` in the compose file.
 

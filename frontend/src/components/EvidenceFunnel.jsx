@@ -49,6 +49,11 @@ export default function EvidenceFunnel({ trace, explanation, evidenceCount }) {
         <span className="funnel-big">{num(evidenceCount)}</span>
         <span className="small muted">sources kept: {kept || 'none'}</span>
         <span className="small muted">{graph ? `Technique page, graph facts and the best ${trace.top_k ?? '—'} texts on the selected relations` : `Technique page plus the best ${trace.top_k ?? '—'} others${trace.min_score != null ? `, score ≥ ${trace.min_score}` : ''}`}</span>
+        {trace.rerank && (
+          <span className="small muted" title="A cross-encoder read the query with each candidate text and reordered them">
+            Reranked {num(trace.rerank.candidates)} texts with {trace.rerank.model.split('/').pop()} ({trace.rerank.latency_ms} ms)
+          </span>
+        )}
         <span className={`small ${trace.fallback_to_tactic ? 'warn-text' : 'muted'}`}>
           {trace.fallback_to_tactic ? 'Fell back to tactic-level evidence' : 'Technique-level match, no fallback'}
         </span>

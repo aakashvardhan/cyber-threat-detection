@@ -95,6 +95,20 @@ Evaluation: `scripts/eval_graph_retrieval.py` (no LLM: does the context reach th
 `scripts/eval_rag_judge.py --retriever graph|vector` (LLM judge), then `scripts/add_graph_rag_metrics.py`
 merges both into `metrics.json` for the Evaluation page.
 
+## Reranking and incident chat (v0.7.0)
+
+- **Reranking** (`app/rerank.py`): GraphRAG's candidate texts (procedure examples, CTI spans) are rescored by a
+  cross-encoder that reads the query and each text together, then taken in that order with the same per-report limits.
+  `RERANK=false` turns it off; `RERANK_MODEL` picks the model (default `cross-encoder/ms-marco-MiniLM-L-6-v2`, baked
+  into the Docker image); `retrieval_trace.rerank` records it.
+- **Incident chat** (`app/chat.py`, `GET/POST/DELETE /incidents/{id}/chat`): the LLM rewrites a follow-up question into
+  a standalone query (and names another technique if the analyst asks about one); GraphRAG retrieves for that query;
+  the LLM answers from the incident, its explanation, the conversation and the numbered evidence, with citations. The
+  last 20 messages are kept with the incident state (DynamoDB). Without an LLM the answer lists the related evidence.
+- **Evaluation cache**: `scripts/eval_rag_judge.py` stores LLM answers in `.eval_cache/llm_cache.sqlite`, so reruns
+  only call the LLM for prompts that changed. Compare reranking on the same incidents:
+  `python scripts/eval_rag_judge.py --rerank off`, then `--rerank on`, then `python scripts/add_graph_rag_metrics.py`.
+
 ## Notes
 
 - Retrieval maps the old UWF tactic "Defense Evasion" to the newer ATT&CK names (Stealth, Defense Impairment), so tactic fallback still finds evidence.

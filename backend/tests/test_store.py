@@ -106,3 +106,15 @@ def test_unreachable_dynamodb_falls_back_to_memory(make_settings, monkeypatch):
     with TestClient(app, headers={"X-API-Key": API_KEY}) as client:
         assert run_replay(client)                            # the console still works
     assert app.state.app_state.store.name == "memory"
+
+
+def test_chat_survives_a_restart_with_dynamodb(aws, make_settings):
+    extra = {"incident_store": "dynamodb", "dynamodb_table": TABLE}
+    with TestClient(create_app(make_settings(**extra)), headers={"X-API-Key": API_KEY}) as client:
+        incident_id = run_replay(client)[0]["incident_id"]
+        client.post(f"/incidents/{incident_id}/chat", json={"message": "Who uses this technique?"})
+    with TestClient(create_app(make_settings(**extra)), headers={"X-API-Key": API_KEY}) as client:
+        run_replay(client)
+        messages = client.get(f"/incidents/{incident_id}/chat").json()["messages"]
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[0]["text"] == "Who uses this technique?" and messages[1]["evidence"]

@@ -58,6 +58,8 @@ class Incident:
     evidence: list[dict] = field(default_factory=list)
     retrieval_trace: dict | None = None
     cve_status: str = "not_applicable"
+    # follow-up questions and answers (managed by app.chat)
+    chat: list[dict] = field(default_factory=list)
 
     @property
     def last_window(self) -> pd.Timestamp:
@@ -93,6 +95,13 @@ class Incident:
     def severity(self) -> str | None:
         ranked = [e.severity for e in self.edges if e.severity in SEVERITY_RANK]
         return max(ranked, key=SEVERITY_RANK.get) if ranked else None
+
+
+def label_probs(classes, probs, i: int) -> dict[str, float]:
+    """One row's label distribution; zero entries are dropped, so a row without labels gives {} (= no prediction)."""
+    if probs is None or not len(classes):
+        return {}
+    return {label: float(p) for label, p in zip(classes, probs[i]) if p > 0}
 
 
 HIGH_CONFIDENCE = 0.80   # attack probability for "high-confidence" (the console's urgent level)
@@ -151,10 +160,8 @@ class ReplayState:
             probability = float(prediction.attack_probability[i])
             if probability < threshold:
                 continue
-            technique_probs = (dict(zip(prediction.technique_classes, map(float, prediction.technique_probs[i])))
-                               if prediction.technique_probs is not None and len(prediction.technique_classes) else {})
-            tactic_probs = (dict(zip(prediction.tactic_classes, map(float, prediction.tactic_probs[i])))
-                            if prediction.tactic_probs is not None and len(prediction.tactic_classes) else {})
+            technique_probs = label_probs(prediction.technique_classes, prediction.technique_probs, i)
+            tactic_probs = label_probs(prediction.tactic_classes, prediction.tactic_probs, i)
             top = max(technique_probs, key=technique_probs.get) if technique_probs else "unknown"
             edge = EdgeRecord(
                 row=int(row_index), event_id=row["event_id"], window_start=window,

@@ -52,6 +52,9 @@ class Settings:
     # retrieval: "auto" uses vector search when chromadb + sentence-transformers + the model are available
     rag_mode: str = "auto"                    # "auto" | "vector" | "token"
     embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    rerank: bool = False                      # cross-encoder reranking of the text evidence (RERANK)
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_candidates: int = 30
     chroma_dir: Path | None = None
     chroma_host: str | None = None            # Chroma server (docker compose); unset = files in CHROMA_DIR
     chroma_port: int = 8000
@@ -127,6 +130,9 @@ class Settings:
             knowledge_dir=path("KNOWLEDGE_DIR", data_dir / "knowledge", DEMO_DATA / "rag" / "processed"),
             rag_mode=_env("RAG_MODE", "auto").lower(),
             embed_model=_env("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
+            rerank=_flag("RERANK", True),
+            rerank_model=_env("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+            rerank_candidates=int(_env("RERANK_CANDIDATES", "30")),
             chroma_dir=Path(_env("CHROMA_DIR", str(data_dir / "chroma_db"))),
             chroma_host=_env("CHROMA_HOST"),
             chroma_port=int(_env("CHROMA_PORT", "8000")),

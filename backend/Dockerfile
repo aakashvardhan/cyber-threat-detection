@@ -24,6 +24,9 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
 # Embedding model baked into the image, so the container starts without downloading it
 ARG EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBED_MODEL}')"
+# Reranker (RERANK_MODEL in the backend environment must match; RERANK=false turns it off)
+ARG RERANK_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('${RERANK_MODEL}')"
 
 COPY backend/ .
 

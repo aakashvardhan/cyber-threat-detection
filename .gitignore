@@ -18,3 +18,4 @@ plugins/
 backend/data/
 backend/eval_*.csv
 backend/eval_*.json
+backend/.eval_cache/

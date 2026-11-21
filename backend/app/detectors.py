@@ -378,9 +378,16 @@ def load_detector(settings: Settings, replay: ReplayData) -> Detector:
     errors = []
 
     def try_precomputed():
-        if settings.primary_predictions and settings.primary_predictions.exists():
+        if not (settings.primary_predictions and settings.primary_predictions.exists()):
+            errors.append("precomputed: no PRIMARY_PREDICTIONS file")
+            return None
+        try:
             return PrecomputedDetector(settings.primary_predictions, settings.threshold)
-        errors.append("precomputed: no PRIMARY_PREDICTIONS file")
+        except Exception as exc:  # noqa: BLE001 - a broken file must not block the fallback in auto mode
+            if choice == "precomputed":
+                raise
+            errors.append(f"precomputed: cannot read {settings.primary_predictions.name} ({type(exc).__name__}: {exc})")
+            return None
 
     def try_graph(kind):
         def attempt():

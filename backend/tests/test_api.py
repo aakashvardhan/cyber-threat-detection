@@ -264,7 +264,7 @@ def test_llm_failure_falls_back_to_evidence_only(make_settings):
 def test_redactor_round_trip():
     r = Redactor(["143.88.6.11", "143.88.6.1"], enabled=True)
     hidden = r.hide("143.88.6.11 talked to 143.88.6.1 and 143.88.6.111")
-    assert hidden == "host-A talked to host-B and 143.88.6.111"
+    assert hidden == "host-A talked to host-B and host-C"   # every IPv4 is hidden, not only the incident's
     assert r.reveal(hidden) == "143.88.6.11 talked to 143.88.6.1 and 143.88.6.111"
 
 

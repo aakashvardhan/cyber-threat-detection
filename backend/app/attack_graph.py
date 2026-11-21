@@ -176,10 +176,13 @@ class AttackGraph:
         parents = [n for n, v in self.nodes.items() if v["type"] == "Technique" and not v.get("is_subtechnique")]
         co.add_nodes_from(parents)
         by_actor: dict[str, set[str]] = defaultdict(set)
-        for tid, actors in users.items():
-            for a in actors:
+        # sorted everywhere: set order changes between Python processes, and Louvain depends on the order of
+        # nodes and edges even with a fixed seed, so unsorted input gave slightly different communities per start
+        for tid in sorted(users):
+            for a in sorted(users[tid]):
                 by_actor[a].add(tid)
-        for actor, techs in by_actor.items():
+        for actor in sorted(by_actor):
+            techs = by_actor[actor]
             techs = sorted(techs)
             w = 1.0 / math.log2(2 + len(techs))           # an actor that uses everything says little
             for i, a in enumerate(techs):
@@ -189,7 +192,7 @@ class AttackGraph:
             data["weight"] /= math.sqrt(len(users[a]) * len(users[b]))
         # Louvain (networkx); Microsoft GraphRAG uses Leiden, a refinement of the same modularity method
         parts = nx.community.louvain_communities(co, weight="weight", seed=seed, resolution=resolution)
-        parts = sorted((p for p in parts if len(p) > 1), key=len, reverse=True)
+        parts = sorted((p for p in parts if len(p) > 1), key=lambda p: (-len(p), min(p)))
         total = len(by_actor) or 1
         for nid, node in self.nodes.items():                # how common a technique is among all actors
             if node["type"] == "Technique":
@@ -211,11 +214,12 @@ class AttackGraph:
                 self.edges.append((t, "IN_COMMUNITY", cid, {}))
 
     def _summarise(self, cid: int, members: set[str], users: dict[str, set[str]]) -> dict:
-        tactic_count = Counter(t for m in members for t in self.nodes[m].get("tactics", [])[:1])
-        top_tech = sorted(members, key=lambda m: -len(users.get(m, ())))[:5]
-        groups = Counter(a for m in members for a in users.get(m, ()) if self.nodes[a]["type"] == "Group")
-        top_groups = [self.nodes[g]["name"] for g, _ in groups.most_common(4)]
-        tactics = [t for t, _ in tactic_count.most_common(3)]
+        ordered = sorted(members)                            # ties are broken by ID, not by set order
+        tactic_count = Counter(t for m in ordered for t in self.nodes[m].get("tactics", [])[:1])
+        top_tech = sorted(ordered, key=lambda m: (-len(users.get(m, ())), m))[:5]
+        groups = Counter(a for m in ordered for a in sorted(users.get(m, ())) if self.nodes[a]["type"] == "Group")
+        top_groups = [self.nodes[g]["name"] for g, _ in sorted(groups.items(), key=lambda kv: (-kv[1], kv[0]))[:4]]
+        tactics = [t for t, _ in sorted(tactic_count.items(), key=lambda kv: (-kv[1], kv[0]))[:3]]
         summary = (f"A cluster of {len(members)} techniques that the same actors tend to use together, mostly "
                    f"{', '.join(tactics)}. Its most used techniques are "
                    + ", ".join(f"{t} {self.nodes[t]['name']}" for t in top_tech)

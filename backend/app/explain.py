@@ -52,6 +52,9 @@ GRAPH_PROMPT = SYSTEM_PROMPT + (
 )
 
 
+IPV4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w]|\.\d)")
+
+
 class Redactor:
     """Replaces IPs with host-A, host-B, ... before text leaves the backend, and maps them back."""
 
@@ -75,7 +78,14 @@ class Redactor:
         return text
 
     def hide(self, text: str) -> str:
-        return self._swap(text, self.forward) if self.enabled else text
+        """Replace the incident's IPs and every other IPv4 address in the text (e.g. IOCs quoted in evidence)."""
+        if not self.enabled:
+            return text
+        for ip in IPV4.findall(text):
+            if ip not in self.forward:
+                alias = f"host-{self._label(len(self.forward))}"
+                self.forward[ip], self.backward[alias] = alias, ip
+        return self._swap(text, self.forward)
 
     def reveal(self, text: str) -> str:
         # the LLM capitalises aliases at the start of a sentence ("Host-A scanned ...")

@@ -1,9 +1,10 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.6.0).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.7.0).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import threading
 from dataclasses import dataclass
@@ -19,7 +20,9 @@ from app.detectors import GRAPH_DETECTORS, Detector, graph_checkpoint, load_dete
 from app.attack_graph import AttackGraph, Neo4jStore, NetworkXStore
 from app.behavior import BehaviorSearch
 from app.graph_rag import GraphRetriever
+from app.rerank import load_reranker
 from app.store import analyst_state, load_store
+from app.chat import IncidentChat
 from app.explain import ExplanationManager
 from app.graph import window_graph
 from app.incidents import Incident, ReplayController, ReplayError
@@ -50,6 +53,7 @@ class AppState:
     detectors: dict | None = None      # loaded graph models by id, for switching the live model
     graph_rag: GraphRetriever | None = None
     store: object | None = None        # incident store (memory or DynamoDB)
+    chat: IncidentChat | None = None
 
 
 def build_state(settings: Settings) -> AppState:
@@ -91,6 +95,7 @@ def build_state(settings: Settings) -> AppState:
     state.explanations.history = lambda incident: earlier_incidents(state, incident)
     state.explanations.store = store
     state.explanations.model_name = lambda: state.detector.name
+    state.chat = IncidentChat(state.explanations, store, lambda: state.detector.name)
     return state
 
 
@@ -110,7 +115,7 @@ def load_graph_rag(settings: Settings, kb: KnowledgeBase) -> GraphRetriever | No
             log.info("GraphRAG queries Neo4j at %s", settings.neo4j_uri)
         except Exception as exc:  # noqa: BLE001 - keep the console running on the in-memory graph
             log.warning("Neo4j unavailable (%s: %s); GraphRAG uses the in-memory graph", type(exc).__name__, exc)
-    return GraphRetriever(graph, store or NetworkXStore(graph), kb)
+    return GraphRetriever(graph, store or NetworkXStore(graph), kb, load_reranker(settings))
 
 
 def earlier_incidents(state: AppState, incident: Incident, hours: int = 24) -> list[Incident]:
@@ -265,17 +270,17 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.6.0",
+    app = FastAPI(title="Threat Detection Console API", version="0.7.0",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
-                       allow_methods=["GET", "POST", "PATCH", "OPTIONS"], allow_headers=["*"])
+                       allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allow_headers=["*"])
     app.state.app_state = build_state(settings)
 
     def get_state(request: Request) -> AppState:
         return request.app.state.app_state
 
     def require_key(x_api_key: str | None = Header(default=None)) -> None:
-        if x_api_key != settings.api_key:
+        if not hmac.compare_digest((x_api_key or "").encode(), settings.api_key.encode()):
             raise HTTPException(status_code=401, detail="Missing or wrong X-API-Key")
 
     @app.exception_handler(ReplayError)
@@ -326,6 +331,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def get_incident(incident_id: str, refresh_explanation: bool = Query(default=False),
                      state: AppState = Depends(get_state)):
         return incident_detail(state, find(state, incident_id), refresh_explanation)
+
+    def chat_thread(state: AppState, incident: Incident) -> dict:
+        return {"incident_id": incident.incident_id, "llm_enabled": state.chat.llm_enabled, "messages": incident.chat}
+
+    @app.get("/incidents/{incident_id}/chat", response_model=schemas.ChatThread, tags=["Incidents"],
+             dependencies=[Depends(require_key)],
+             responses={401: {"model": schemas.Error}, 404: {"model": schemas.Error}})
+    def get_chat(incident_id: str, state: AppState = Depends(get_state)):
+        return chat_thread(state, find(state, incident_id))
+
+    @app.post("/incidents/{incident_id}/chat", response_model=schemas.ChatThread, tags=["Incidents"],
+              dependencies=[Depends(require_key)],
+              responses={401: {"model": schemas.Error}, 404: {"model": schemas.Error}, 422: {"model": schemas.Error}})
+    def ask_chat(incident_id: str, body: schemas.ChatRequest, state: AppState = Depends(get_state)):
+        """Ask a follow-up question; the answer is built from fresh retrieval and cites evidence IDs."""
+        incident = find(state, incident_id)
+        state.chat.ask(incident, body.message)
+        return chat_thread(state, incident)
+
+    @app.delete("/incidents/{incident_id}/chat", response_model=schemas.ChatThread, tags=["Incidents"],
+                dependencies=[Depends(require_key)],
+                responses={401: {"model": schemas.Error}, 404: {"model": schemas.Error}})
+    def clear_chat(incident_id: str, state: AppState = Depends(get_state)):
+        incident = find(state, incident_id)
+        state.chat.clear(incident)
+        return chat_thread(state, incident)
 
     @app.get("/incidents/{incident_id}/graph", response_model=schemas.WindowGraph, tags=["Incidents"],
              dependencies=[Depends(require_key)],
