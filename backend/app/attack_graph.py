@@ -232,6 +232,15 @@ class AttackGraph:
                 out[self.nodes[t]["parent"]].add(s)
         return out
 
+    def signature(self) -> str:
+        """Changes when the STIX file, the CTI spans or the build code change the graph."""
+        import hashlib
+        h = hashlib.sha1()
+        for s, rel, t, _ in sorted(self.edges, key=lambda e: (e[0], e[1], e[2])):
+            h.update(f"{s}|{rel}|{t};".encode())
+        h.update(str(sorted(self.communities)).encode())
+        return h.hexdigest()
+
     def stats(self) -> dict:
         types = Counter(v["type"] for v in self.nodes.values())
         rels = Counter(rel for _, rel, _, _ in self.edges)
@@ -317,6 +326,43 @@ class NetworkXStore:
         return out
 
 
+NEO4J_LABELS = {"Technique", "Tactic", "Group", "Software", "Campaign", "Mitigation", "DetectionStrategy",
+                "DataComponent", "Report", "Community"}
+
+
+def load_into_neo4j(session, graph: AttackGraph, batch: int = 1000) -> dict:
+    """Replace the ATT&CK graph in Neo4j. Every node is :Entity plus its type; a :GraphMeta node keeps the signature."""
+    session.run("CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE").consume()
+    session.run("CREATE INDEX technique_parent IF NOT EXISTS FOR (x:Technique) ON (x.parent)").consume()
+    while session.run("MATCH (e:Entity) WITH e LIMIT 5000 DETACH DELETE e RETURN count(*) AS deleted").single()["deleted"]:
+        pass
+    by_type: dict[str, list[dict]] = defaultdict(list)
+    for node in graph.nodes.values():
+        props = {k: v for k, v in node.items() if v is not None and not isinstance(v, dict)}
+        by_type[node["type"]].append({"id": node["id"], "props": props})
+    for label, rows in by_type.items():
+        if label not in NEO4J_LABELS:
+            raise ValueError(f"unexpected node type {label}")
+        for i in range(0, len(rows), batch):
+            session.run(f"UNWIND $rows AS row MERGE (e:Entity {{id: row.id}}) SET e += row.props, e:{label}",
+                        rows=rows[i:i + batch]).consume()
+    by_rel: dict[str, list[dict]] = defaultdict(list)
+    for s, rel, t, props in graph.edges:
+        by_rel[rel].append({"s": s, "t": t, "props": {k: (json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v)
+                                                      for k, v in (props or {}).items()}})
+    for rel, rows in by_rel.items():
+        if not rel.replace("_", "").isalnum():
+            raise ValueError(f"unexpected relationship type {rel}")
+        for i in range(0, len(rows), batch):
+            session.run(f"UNWIND $rows AS row MATCH (a:Entity {{id: row.s}}) MATCH (b:Entity {{id: row.t}}) "
+                        f"MERGE (a)-[r:{rel}]->(b) SET r += row.props", rows=rows[i:i + batch]).consume()
+    session.run("MERGE (m:GraphMeta {name: 'attack'}) SET m.signature = $sig, m.loaded_at = datetime()",
+                sig=graph.signature()).consume()
+    nodes = session.run("MATCH (e:Entity) RETURN count(e) AS total").single()["total"]
+    rels = session.run("MATCH (:Entity)-[r]->(:Entity) RETURN count(r) AS total").single()["total"]
+    return {"nodes": nodes, "relationships": rels}
+
+
 class Neo4jStore:
     """The same graph in Neo4j (load it with scripts/load_neo4j.py). Retrieval runs the Cypher below."""
     name = "neo4j"
@@ -342,13 +388,30 @@ class Neo4jStore:
         self.database = database
 
     @classmethod
-    def connect(cls, uri: str, user: str, password: str, database: str | None = None) -> "Neo4jStore":
+    def connect(cls, uri: str, user: str, password: str, database: str | None = None,
+                graph: AttackGraph | None = None, retries: int = 10) -> "Neo4jStore":
+        """Connect; with `graph`, (re)load it when Neo4j is empty or holds an older graph."""
+        import time as _time
         from neo4j import GraphDatabase
 
         driver = GraphDatabase.driver(uri, auth=(user, password))
-        driver.verify_connectivity()
+        for attempt in range(retries):          # in docker compose Neo4j may still be starting
+            try:
+                driver.verify_connectivity()
+                break
+            except Exception:  # noqa: BLE001
+                if attempt == retries - 1:
+                    raise
+                _time.sleep(3)
         store = cls(driver, database)
-        if not store._run("MATCH (x:Technique) RETURN count(x) AS techniques")[0]["techniques"]:
+        rows = store._run("OPTIONAL MATCH (m:GraphMeta {name: 'attack'}) RETURN m.signature AS sig")
+        current = rows[0]["sig"] if rows else None
+        if graph is not None and current != graph.signature():
+            log.info("Loading the ATT&CK graph into Neo4j (%s)", "first load" if current is None else "graph changed")
+            with driver.session(database=database) as session:
+                counts = load_into_neo4j(session, graph)
+            log.info("Neo4j now holds %s", counts)
+        elif not store._run("MATCH (x:Technique) RETURN count(x) AS techniques")[0]["techniques"]:
             raise RuntimeError("Neo4j is reachable but has no ATT&CK graph; run scripts/load_neo4j.py")
         return store
 

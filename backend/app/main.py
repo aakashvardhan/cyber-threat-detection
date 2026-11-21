@@ -19,6 +19,7 @@ from app.detectors import GRAPH_DETECTORS, Detector, graph_checkpoint, load_dete
 from app.attack_graph import AttackGraph, Neo4jStore, NetworkXStore
 from app.behavior import BehaviorSearch
 from app.graph_rag import GraphRetriever
+from app.store import analyst_state, load_store
 from app.explain import ExplanationManager
 from app.graph import window_graph
 from app.incidents import Incident, ReplayController, ReplayError
@@ -48,6 +49,7 @@ class AppState:
     edit_lock: threading.Lock
     detectors: dict | None = None      # loaded graph models by id, for switching the live model
     graph_rag: GraphRetriever | None = None
+    store: object | None = None        # incident store (memory or DynamoDB)
 
 
 def build_state(settings: Settings) -> AppState:
@@ -62,11 +64,13 @@ def build_state(settings: Settings) -> AppState:
         kb.add_chunks("procedure", procedures_from_stix(settings.attack_stix))   # procedure_chunks.jsonl missing or LFS pointer
     if settings.rag_mode in ("auto", "vector") and settings.chroma_dir is not None:
         kb.vector = VectorStore.load(settings.knowledge_dir, settings.chroma_dir, settings.embed_model,
-                                     settings.attack_stix, behavior.index.docs if behavior.enabled else None)
+                                     settings.attack_stix, behavior.index.docs if behavior.enabled else None,
+                                     host=settings.chroma_host, port=settings.chroma_port)
         if kb.vector is None and settings.rag_mode == "vector":
             raise RuntimeError("RAG_MODE=vector but the vector store could not be loaded (see the log above)")
         behavior.vector = kb.vector
     graph_rag = load_graph_rag(settings, kb)
+    store = load_store(settings)
     metrics = load_metrics(settings.metrics_file)
     primary = settings.primary_model_name or (
         detector.name if detector.name == "heuristic-fallback" else metrics.get("primary_model") or detector.name)
@@ -77,13 +81,16 @@ def build_state(settings: Settings) -> AppState:
              "on" if behavior.enabled else "off", settings.llm_provider)
     state = AppState(
         settings=settings, replay_data=replay_data, detector=detector,
-        controller=ReplayController(replay_data, detector, settings.incident_gap_minutes),
+        controller=ReplayController(replay_data, detector, settings.incident_gap_minutes, store=store),
         kb=kb, explanations=ExplanationManager(settings, kb, behavior=behavior, data=replay_data, graph=graph_rag),
         model_explainer=ModelExplainer(detector, replay_data, settings.gnn_explainer_epochs, settings.gnn_explainer),
         model_outputs=ModelOutputs.load(settings.model_outputs, replay_data),
         metrics=metrics, primary_model=primary, edit_lock=threading.Lock(),
-        detectors={detector.name: detector} if detector.name in GRAPH_DETECTORS else {}, graph_rag=graph_rag)
+        detectors={detector.name: detector} if detector.name in GRAPH_DETECTORS else {}, graph_rag=graph_rag,
+        store=store)
     state.explanations.history = lambda incident: earlier_incidents(state, incident)
+    state.explanations.store = store
+    state.explanations.model_name = lambda: state.detector.name
     return state
 
 
@@ -99,7 +106,7 @@ def load_graph_rag(settings: Settings, kb: KnowledgeBase) -> GraphRetriever | No
     if settings.neo4j_uri:
         try:
             store = Neo4jStore.connect(settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password or "",
-                                       settings.neo4j_database)
+                                       settings.neo4j_database, graph=graph if settings.neo4j_autoload else None)
             log.info("GraphRAG queries Neo4j at %s", settings.neo4j_uri)
         except Exception as exc:  # noqa: BLE001 - keep the console running on the in-memory graph
             log.warning("Neo4j unavailable (%s: %s); GraphRAG uses the in-memory graph", type(exc).__name__, exc)
@@ -157,7 +164,8 @@ def switch_model(state: AppState, kind: str) -> dict:
                 state.detectors[kind] = detector
             old = state.model_explainer
             state.detector = detector
-            state.controller = ReplayController(state.replay_data, detector, state.settings.incident_gap_minutes)
+            state.controller = ReplayController(state.replay_data, detector, state.settings.incident_gap_minutes,
+                                                store=state.store)
             state.model_explainer = ModelExplainer(detector, state.replay_data, state.settings.gnn_explainer_epochs,
                                                    state.settings.gnn_explainer)
             old.pool.shutdown(wait=False, cancel_futures=True)
@@ -361,6 +369,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if "mitigations_applied" in changed:
                 entry["mitigations_applied"] = incident.mitigations_applied
             incident.activity.append(entry)
+            if state.store is not None:
+                state.store.save(state.detector.name, incident.incident_id, analyst_state(incident))
             return incident_summary(state, incident)
 
     @app.get("/models", response_model=schemas.ModelList, tags=["Models"], dependencies=[Depends(require_key)],
