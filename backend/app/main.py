@@ -62,7 +62,8 @@ def build_state(settings: Settings) -> AppState:
         kb.add_chunks("procedure", procedures_from_stix(settings.attack_stix))   # procedure_chunks.jsonl missing or LFS pointer
     if settings.rag_mode in ("auto", "vector") and settings.chroma_dir is not None:
         kb.vector = VectorStore.load(settings.knowledge_dir, settings.chroma_dir, settings.embed_model,
-                                     settings.attack_stix, behavior.index.docs if behavior.enabled else None)
+                                     settings.attack_stix, behavior.index.docs if behavior.enabled else None,
+                                     host=settings.chroma_host, port=settings.chroma_port)
         if kb.vector is None and settings.rag_mode == "vector":
             raise RuntimeError("RAG_MODE=vector but the vector store could not be loaded (see the log above)")
         behavior.vector = kb.vector
@@ -99,7 +100,7 @@ def load_graph_rag(settings: Settings, kb: KnowledgeBase) -> GraphRetriever | No
     if settings.neo4j_uri:
         try:
             store = Neo4jStore.connect(settings.neo4j_uri, settings.neo4j_user, settings.neo4j_password or "",
-                                       settings.neo4j_database)
+                                       settings.neo4j_database, graph=graph if settings.neo4j_autoload else None)
             log.info("GraphRAG queries Neo4j at %s", settings.neo4j_uri)
         except Exception as exc:  # noqa: BLE001 - keep the console running on the in-memory graph
             log.warning("Neo4j unavailable (%s: %s); GraphRAG uses the in-memory graph", type(exc).__name__, exc)
