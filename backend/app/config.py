@@ -53,6 +53,8 @@ class Settings:
     rag_mode: str = "auto"                    # "auto" | "vector" | "token"
     embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_dir: Path | None = None
+    chroma_host: str | None = None            # Chroma server (docker compose); unset = files in CHROMA_DIR
+    chroma_port: int = 8000
     attack_stix: Path | None = None           # enterprise-attack.json: technique documents + procedure examples
     # GraphRAG: "graph" retrieves over the ATT&CK knowledge graph, "vector" is the earlier text retriever (baseline)
     retriever: str = "graph"
@@ -60,6 +62,7 @@ class Settings:
     neo4j_user: str = "neo4j"
     neo4j_password: str | None = None
     neo4j_database: str | None = None
+    neo4j_autoload: bool = True               # load the ATT&CK graph into Neo4j when it is empty or out of date
     behavior_check: bool = True
     gnn_explainer: bool = True               # GNNExplainer for the GraphSAGE detector (incident page)
     gnn_explainer_epochs: int = 100
@@ -119,6 +122,8 @@ class Settings:
             rag_mode=_env("RAG_MODE", "auto").lower(),
             embed_model=_env("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
             chroma_dir=Path(_env("CHROMA_DIR", str(data_dir / "chroma_db"))),
+            chroma_host=_env("CHROMA_HOST"),
+            chroma_port=int(_env("CHROMA_PORT", "8000")),
             attack_stix=path("ATTACK_STIX", data_dir / "knowledge" / "enterprise-attack.json",
                              DEMO_DATA / "rag" / "enterprise-attack.json"),
             retriever=_env("RETRIEVER", "graph").lower(),
@@ -126,6 +131,7 @@ class Settings:
             neo4j_user=_env("NEO4J_USER", "neo4j"),
             neo4j_password=_env("NEO4J_PASSWORD"),
             neo4j_database=_env("NEO4J_DATABASE"),
+            neo4j_autoload=_flag("NEO4J_AUTOLOAD", True),
             behavior_check=_flag("BEHAVIOR_CHECK", True),
             gnn_explainer=_flag("GNN_EXPLAINER", True),
             gnn_explainer_epochs=int(_env("GNN_EXPLAINER_EPOCHS", "100")),
