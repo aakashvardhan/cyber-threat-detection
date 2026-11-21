@@ -99,7 +99,7 @@ merges both into `metrics.json` for the Evaluation page.
 
 - **Reranking** (`app/rerank.py`): GraphRAG's candidate texts (procedure examples, CTI spans) are rescored by a
   cross-encoder that reads the query and each text together, then taken in that order with the same per-report limits.
-  `RERANK=false` turns it off; `RERANK_MODEL` picks the model (default `cross-encoder/ms-marco-MiniLM-L-6-v2`, baked
+  Off by default (`RERANK=true` turns it on): on the 50-incident judge it changed no metric beyond judge variance; `RERANK_MODEL` picks the model (default `cross-encoder/ms-marco-MiniLM-L-6-v2`, baked
   into the Docker image); `retrieval_trace.rerank` records it.
 - **Incident chat** (`app/chat.py`, `GET/POST/DELETE /incidents/{id}/chat`): the LLM rewrites a follow-up question into
   a standalone query (and names another technique if the analyst asks about one); GraphRAG retrieves for that query;

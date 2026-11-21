@@ -4,7 +4,8 @@ GraphRAG first collects candidate texts from the knowledge graph and orders them
 overlap with the incident. A cross-encoder then reads the incident query and each candidate together and scores how
 well the text answers it; the evidence is taken in that order (with the same per-report and per-source limits).
 
-    RERANK=true|false        on by default when the model can be loaded
+    RERANK=true|false        off by default: on the 50-incident LLM judge it changed no metric beyond judge variance
+                             (it only reorders procedure/CTI text; the MITRE and graph evidence stay in place)
     RERANK_MODEL             default cross-encoder/ms-marco-MiniLM-L-6-v2 (22M parameters, fast on CPU);
                              e.g. BAAI/bge-reranker-base is more accurate but about 10x slower on CPU
     RERANK_CANDIDATES        how many first-stage candidates are rescored (default 30)

@@ -130,7 +130,7 @@ class Settings:
             knowledge_dir=path("KNOWLEDGE_DIR", data_dir / "knowledge", DEMO_DATA / "rag" / "processed"),
             rag_mode=_env("RAG_MODE", "auto").lower(),
             embed_model=_env("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
-            rerank=_flag("RERANK", True),
+            rerank=_flag("RERANK", False),
             rerank_model=_env("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
             rerank_candidates=int(_env("RERANK_CANDIDATES", "30")),
             chroma_dir=Path(_env("CHROMA_DIR", str(data_dir / "chroma_db"))),

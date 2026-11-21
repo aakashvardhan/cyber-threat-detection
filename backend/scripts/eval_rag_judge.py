@@ -21,7 +21,7 @@ same 50 incidents; outputs then go to eval_rag_judge_<retriever>.csv / _summary.
 LLM answers (explanations and verdicts) are cached in .eval_cache/llm_cache.sqlite: a rerun with the same inputs
 makes no API calls, and after a change (e.g. reranking) only the incidents whose prompts changed are sent again.
 --cache PATH uses another cache file, --no-cache always calls the APIs.
---rerank on|off turns the cross-encoder reranker on or off (default: RERANK in .env, else on); with it on the outputs
+--rerank on|off turns the cross-encoder reranker on or off (default: RERANK in .env, else off); with it on the outputs
 are eval_rag_judge_<retriever>_rerank.*, so the two runs can be compared on the same incidents:
     python scripts/eval_rag_judge.py --rerank off
     python scripts/eval_rag_judge.py --rerank on        # only incidents whose evidence order changed call the LLM
