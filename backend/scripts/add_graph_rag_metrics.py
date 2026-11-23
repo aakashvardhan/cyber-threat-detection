@@ -51,6 +51,10 @@ def main() -> None:
     vector = Path("eval_rag_judge_vector_summary.json")
     if vector.exists():
         block["rag_judge_vector"] = judge_block(json.loads(vector.read_text()))
+    reranked = Path("eval_rag_judge_graph_rerank_summary.json")
+    if reranked.exists():
+        block["rag_judge_rerank"] = {**judge_block(json.loads(reranked.read_text())),
+                                     "rerank_model": json.loads(reranked.read_text()).get("rerank_model")}
     metrics["graph_rag"] = block
     Path(target).write_text(json.dumps(metrics, indent=2))
     print(f"Updated {target}: graph_rag ({'with' if 'rag_judge' in block else 'without'} the LLM-judge results)")

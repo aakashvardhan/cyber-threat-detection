@@ -1,26 +1,101 @@
-# Local services for the Threat Console.
-# Now: Neo4j for GraphRAG. Next step: backend, frontend, Chroma and DynamoDB Local are added here.
+# Threat Console: the whole system in containers.
 #
-#   docker compose up -d neo4j                         # start Neo4j (browser: http://localhost:7474)
-#   cd backend && python scripts/load_neo4j.py --check  # load the ATT&CK graph and compare with the in-memory graph
+#   cp .env.example .env            # then set NEO4J_PASSWORD, API_KEY and (optional) GROQ_API_KEY
+#   docker compose up -d --build    # first build takes a while (PyTorch, embedding model)
 #
-# The password comes from NEO4J_PASSWORD in a .env file next to this one (at least 8 characters).
+#   Console          http://localhost:8080
+#   API              http://localhost:8000/docs
+#   Neo4j Browser    http://localhost:7474   (user neo4j, password NEO4J_PASSWORD)
+#
+# Data that is not in the images is mounted from backend/data (checkpoints, test edges, knowledge files,
+# metrics.json); see backend/README.md, "Run with Docker". On AWS the same files come from S3.
+name: threat-console
+
 services:
   neo4j:
     image: neo4j:5-community
-    container_name: threat-console-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env (8+ characters)}
+      NEO4J_server_memory_heap_max__size: 1G
     ports:
       - "7474:7474"   # Neo4j Browser
-      - "7687:7687"   # Bolt (the backend and load_neo4j.py)
-    environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
-      NEO4J_server_memory_heap_max__size: 1G
+      - "7687:7687"   # Bolt
     volumes:
       - neo4j-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#neo4j/}\" 'RETURN 1' >/dev/null 2>&1 || exit 1"]
       interval: 10s
-      retries: 12
+      timeout: 10s
+      retries: 18
+      start_period: 20s
+
+  chroma:
+    build: ./infra/chroma
+    volumes:
+      - chroma-data:/data
+    ports:
+      - "8001:8000"
+
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/home/dynamodblocal/data"]
+    user: root
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    ports:
+      - "8002:8000"
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      DATA_DIR: /app/backend/data
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      REDACT_IPS: ${REDACT_IPS:-true}
+      RETRIEVER: graph
+      RERANK: ${RERANK:-false}          # off: no measured gain (DEPLOYMENT.md); the model is baked in, so true needs no rebuild
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      INCIDENT_STORE: dynamodb
+      DYNAMODB_TABLE: threat-console-incidents
+      DYNAMODB_ENDPOINT: http://dynamodb:8000
+      AWS_REGION: ${AWS_REGION:-us-west-2}
+      AWS_ACCESS_KEY_ID: local          # DynamoDB Local accepts any key; on AWS the instance role is used
+      AWS_SECRET_ACCESS_KEY: local
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      # the ATT&CK STIX file, if it is not in backend/data/knowledge
+      ATTACK_STIX: ${ATTACK_STIX:-/app/demo/2026-10-06_meeting/app/data/rag/enterprise-attack.json}
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./demo/2026-10-06_meeting/app/data/rag:/app/demo/2026-10-06_meeting/app/data/rag:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+      dynamodb:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+        VITE_API_KEY: ${API_KEY}
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
 volumes:
   neo4j-data:
+  chroma-data:
+  dynamodb-data:

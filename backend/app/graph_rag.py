@@ -42,10 +42,11 @@ def _names(sub: Subgraph, ids: list[str]) -> str:
 
 
 class GraphRetriever:
-    def __init__(self, graph: AttackGraph, store, kb: KnowledgeBase):
+    def __init__(self, graph: AttackGraph, store, kb: KnowledgeBase, reranker=None):
         self.graph = graph            # in-memory copy (for the knowledge-base stats and the communities)
         self.store = store            # NetworkXStore or Neo4jStore: where retrieval queries run
         self.kb = kb
+        self.reranker = reranker      # optional cross-encoder for the text evidence (app.rerank)
 
     # ------------------------------------------------------------------ retrieval
     def retrieve(self, technique_id: str | None, tactic: str | None, query: str, top_k: int = 5,
@@ -209,6 +210,9 @@ class GraphRetriever:
                                "title": " ".join(x for x in [sub.nodes[r].get("apt_group"), sub.nodes[r]["name"]] if x),
                                "text": chunk["text"], "url": sub.nodes[r].get("url")}, [r, *about]))
         texts.sort(key=lambda x: -x[0])
+        rerank_trace = None
+        if self.reranker is not None and len(texts) > 1:
+            texts, rerank_trace = self.reranker.rerank(query, texts, lambda x: x[1]["text"])
         seen, picked, per_report, per_source = set(), 0, Counter(), Counter()
         for score, item, nodes in texts:
             if (picked >= top_k or item["text"] in seen or per_report[item["title"]] >= 2
@@ -269,7 +273,7 @@ class GraphRetriever:
                     "returned": sum(e["source"] == "cti" for e in evidence)},
                    {"source": "cve", "returned": len(cve[:2]), **({} if parent in CVE_TECHNIQUES else {"skipped": True})}]
         trace = {"query": query, "sources": sources, "top_k": top_k, "min_score": None, "fallback_to_tactic": False,
-                 "latency_ms": latency, "retriever": "graph",
+                 "latency_ms": latency, "retriever": "graph", "rerank": rerank_trace,
                  "graph": {"store": sub.store, "method": METHOD, "seeds": seeds,
                            "subgraph": {"nodes": len(sub.nodes), "edges": len(sub.edges)},
                            "actors": len(users), "community": sub.nodes[community]["name"] if community else None,

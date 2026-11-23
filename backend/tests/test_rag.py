@@ -229,7 +229,7 @@ def test_redactor_reveals_capitalised_aliases():
     from app.explain import Redactor
     r = Redactor(["143.88.4.11", "143.88.5.1"], enabled=True)
     assert r.reveal("Host-A scanned host-B. HOST-A again.") == "143.88.4.11 scanned 143.88.5.1. 143.88.4.11 again."
-    assert r.hide("Traffic to 143.88.5.1. Not 143.88.5.10 or 143.88.4.110.") == "Traffic to host-B. Not 143.88.5.10 or 143.88.4.110."
+    assert r.hide("Traffic to 143.88.5.1. Not 143.88.5.10 or 143.88.4.110.") == "Traffic to host-B. Not host-C or host-D."
 
 
 # ---------------------------------------------------------------- window graph

@@ -58,6 +58,12 @@ Follows `notebooks/RAG/rag.ipynb`. For each incident, on the first `GET /inciden
 | `ATTACK_STIX` | `data/knowledge/enterprise-attack.json`, else the Oct 6 demo copy | Technique documents for the behaviour check; procedure examples |
 | `BEHAVIOR_CHECK` | `true` | |
 
+## Run with Docker
+
+From the repository root: `cp .env.example .env`, set the values, then `docker compose up -d --build`.
+Console on http://localhost:8080, API on http://localhost:8000. Details, data files and the AWS notes:
+[DEPLOYMENT.md](../DEPLOYMENT.md).
+
 ## GraphRAG (v0.6.0)
 
 Retrieval runs over the MITRE ATT&CK knowledge graph (`app/attack_graph.py`, `app/graph_rag.py`), following the three
@@ -81,12 +87,27 @@ stages of Peng et al. 2024 (*Graph Retrieval-Augmented Generation: A Survey*, ar
 | `RETRIEVER` | `graph` | `vector` = the earlier text retriever (baseline) |
 | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` | unset | When set, graph queries go to Neo4j; unset or unreachable = the same graph in memory |
 
-Neo4j: `docker compose up -d neo4j` (repo root, `NEO4J_PASSWORD` in `.env`), then `python scripts/load_neo4j.py --check`
-loads the graph and checks that Neo4j returns the same subgraph and evidence as the in-memory graph.
+Neo4j: `docker compose up -d neo4j` (repo root, `NEO4J_PASSWORD` in `.env`). The backend loads the graph by itself when
+Neo4j is empty or out of date (`NEO4J_AUTOLOAD`); `python scripts/load_neo4j.py --check` reloads it and checks that Neo4j
+returns the same subgraph and evidence as the in-memory graph.
 
 Evaluation: `scripts/eval_graph_retrieval.py` (no LLM: does the context reach the true technique?),
 `scripts/eval_rag_judge.py --retriever graph|vector` (LLM judge), then `scripts/add_graph_rag_metrics.py`
 merges both into `metrics.json` for the Evaluation page.
+
+## Reranking and incident chat (v0.7.0)
+
+- **Reranking** (`app/rerank.py`): GraphRAG's candidate texts (procedure examples, CTI spans) are rescored by a
+  cross-encoder that reads the query and each text together, then taken in that order with the same per-report limits.
+  Off by default (`RERANK=true` turns it on): on the 50-incident judge it changed no metric beyond judge variance; `RERANK_MODEL` picks the model (default `cross-encoder/ms-marco-MiniLM-L-6-v2`, baked
+  into the Docker image); `retrieval_trace.rerank` records it.
+- **Incident chat** (`app/chat.py`, `GET/POST/DELETE /incidents/{id}/chat`): the LLM rewrites a follow-up question into
+  a standalone query (and names another technique if the analyst asks about one); GraphRAG retrieves for that query;
+  the LLM answers from the incident, its explanation, the conversation and the numbered evidence, with citations. The
+  last 20 messages are kept with the incident state (DynamoDB). Without an LLM the answer lists the related evidence.
+- **Evaluation cache**: `scripts/eval_rag_judge.py` stores LLM answers in `.eval_cache/llm_cache.sqlite`, so reruns
+  only call the LLM for prompts that changed. Compare reranking on the same incidents:
+  `python scripts/eval_rag_judge.py --rerank off`, then `--rerank on`, then `python scripts/add_graph_rag_metrics.py`.
 
 ## Notes
 

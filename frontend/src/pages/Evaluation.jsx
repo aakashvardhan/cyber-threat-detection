@@ -219,7 +219,7 @@ function RagJudge({ j }) {
 }
 
 /** GraphRAG (ATT&CK knowledge graph) vs the earlier vector retriever, on the same incidents. */
-function GraphRagPanel({ g, vectorJudge }) {
+function GraphRagPanel({ g, vectorJudge, vectorGround }) {
   const ret = g.retrieval?.all_labelled;
   const s = g.retrieval?.judge_sample_50;
   const kg = g.knowledge_graph || {};
@@ -232,6 +232,7 @@ function GraphRagPanel({ g, vectorJudge }) {
     </tr>
   );
   const gj = g.rag_judge;
+  const rr = g.rag_judge_rerank;
   return (
     <section className="panel">
       <div className="panel-head">
@@ -270,17 +271,35 @@ function GraphRagPanel({ g, vectorJudge }) {
             <h3 className="mini-head" style={{ marginTop: 18 }}>LLM-judge metrics (50 incidents)</h3>
             <div className="table-scroll">
               <table className="eval-table compact">
-                <thead><tr><th scope="col">Metric</th><th scope="col">Part</th><th className="num" scope="col">Vector RAG</th><th className="num" scope="col">GraphRAG</th><th className="num" scope="col">GraphRAG, technique wrong</th></tr></thead>
+                <thead><tr><th scope="col">Metric</th><th scope="col">Part</th><th className="num" scope="col">Vector RAG</th><th className="num" scope="col">GraphRAG</th>
+                  {rr && <th className="num" scope="col">GraphRAG + rerank</th>}
+                  <th className="num" scope="col">Vector RAG, technique wrong</th><th className="num" scope="col">GraphRAG, technique wrong</th></tr></thead>
                 <tbody>
                   {JUDGE.map(([k, name, part]) => (
                     <tr key={k}><th scope="row">{name}</th><td className="small muted">{part}</td>
                       <td className="num mono">{fmt(vectorJudge?.all?.[k])}</td>
                       <td className="num mono">{gj ? fmt(gj.all?.[k]) : 'pending'}</td>
+                      {rr && <td className="num mono">{fmt(rr.all?.[k])}</td>}
+                      <td className="num mono">{fmt(vectorJudge?.technique_wrong?.[k])}</td>
                       <td className="num mono">{gj ? fmt(gj.technique_wrong?.[k]) : 'pending'}</td></tr>
                   ))}
+                  {gj?.groundedness != null && (
+                    <tr><th scope="row">Groundedness</th><td className="small muted">Generator</td>
+                      <td className="num mono">{fmt(vectorJudge?.groundedness ?? vectorGround)}</td><td className="num mono">{fmt(gj.groundedness)}</td>
+                      {rr && <td className="num mono">{fmt(rr.groundedness)}</td>}<td className="num mono">—</td><td className="num mono">—</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
+            {gj && (
+              <p className="finding" style={{ marginTop: 10 }}>
+                GraphRAG scores higher than vector RAG on every metric (answer relevancy is 1.0 for both), and still finds some evidence for the
+                true technique when the detector is wrong.
+                {rr && <> Reranking ({rr.rerank_model?.split('/').pop()}) changes no metric by more than the judge's own run-to-run
+                  variation: it only reorders procedure and report text, while the evidence that carries the true technique
+                  (MITRE descriptions, the behaviour check's alternative) is not reranked. It is off by default (<span className="mono">RERANK</span>).</>}
+              </p>
+            )}
             {!gj && <p className="small muted" style={{ marginTop: 8 }}>GraphRAG judge scores: run <span className="mono">python scripts/eval_rag_judge.py --retriever graph</span>, then <span className="mono">scripts/add_graph_rag_metrics.py</span>.</p>}
           </>
         )}
@@ -434,7 +453,7 @@ export default function Evaluation() {
             <PilotPanel m={m} cols={tab === 'detection' ? DETECTION : TECHNIQUE} />
           </>
         )}
-        {tab === 'rag' && m.graph_rag && <GraphRagPanel g={m.graph_rag} vectorJudge={m.graph_rag.rag_judge_vector || rag?.rag_judge} />}
+        {tab === 'rag' && m.graph_rag && <GraphRagPanel g={m.graph_rag} vectorJudge={m.graph_rag.rag_judge_vector || rag?.rag_judge} vectorGround={rag?.explanation?.groundedness} />}
         {tab === 'rag' && (rag ? <ExplanationLayer m={rag} /> : <section className="panel empty">No explanation metrics yet.</section>)}
         {tab === 'ablation' && (m.rag_ablation?.length ? <Ablations items={m.rag_ablation} /> : <section className="panel empty">No ablation results yet.</section>)}
 

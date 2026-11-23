@@ -204,3 +204,45 @@ def test_vector_retriever_stays_available(make_settings, tmp_path):
     assert body["retrieval_trace"]["retriever"] in ("vector", "token")
     assert body["retrieval_trace"].get("graph") is None
     assert not any(e["source"] == "graph" for e in body["evidence"])
+
+
+def test_graph_signature_is_stable_and_tracks_changes(tmp_path):
+    a = AttackGraph.from_stix(make_stix(tmp_path / "a.json"), CTI)
+    b = AttackGraph.from_stix(make_stix(tmp_path / "b.json"), CTI)
+    assert a.signature() == b.signature()                 # same input, same graph: no reload
+    c = AttackGraph.from_stix(make_stix(tmp_path / "c.json"))   # without the CTI report
+    assert c.signature() != a.signature()
+
+
+class RecordingSession:
+    """Records the Cypher that load_into_neo4j sends (no Neo4j needed)."""
+
+    def __init__(self):
+        self.calls = []
+
+    def run(self, query, **params):
+        self.calls.append((query, params))
+        rows = {"deleted": 0, "total": 1}
+
+        class Result:
+            def consume(self):
+                return None
+
+            def single(self):
+                return rows
+        return Result()
+
+
+def test_load_into_neo4j_sends_every_node_edge_and_the_signature(graph):
+    from app.attack_graph import load_into_neo4j
+    session = RecordingSession()
+    load_into_neo4j(session, graph)
+    queries = [q for q, _ in session.calls]
+    assert any("CREATE CONSTRAINT entity_id" in q for q in queries)
+    sent_nodes = sum(len(p["rows"]) for q, p in session.calls if "MERGE (e:Entity" in q)
+    sent_edges = sum(len(p["rows"]) for q, p in session.calls if "MERGE (a)-[r:" in q)
+    assert sent_nodes == len(graph.nodes) and sent_edges == len(graph.edges)
+    meta = next(p for q, p in session.calls if "GraphMeta" in q)
+    assert meta["sig"] == graph.signature()
+    describes = next(p for q, p in session.calls if "[r:DESCRIBES]" in q)["rows"][0]["props"]
+    assert isinstance(describes["chunks"], str)            # lists of dicts are stored as JSON text

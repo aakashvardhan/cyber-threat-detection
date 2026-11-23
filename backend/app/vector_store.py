@@ -93,7 +93,7 @@ class VectorStore:
     # ----- building -----
     @classmethod
     def load(cls, knowledge_dir: Path | None, chroma_dir: Path, model: str, stix_path: Path | None = None,
-             technique_docs: dict | None = None) -> "VectorStore | None":
+             technique_docs: dict | None = None, host: str | None = None, port: int = 8000) -> "VectorStore | None":
         try:
             import chromadb
             from sentence_transformers import SentenceTransformer
@@ -123,6 +123,16 @@ class VectorStore:
             sources["techniques"] = [{"id": t, "text": f"{d['name']}. {d['text'][:1500]} {d['network_text'][:1500]}",
                                       "metadata": {"technique_ids": [t], "name": d["name"]}} for t, d in technique_docs.items()]
 
+        if host:            # Chroma server (docker compose / AWS)
+            try:
+                client = chromadb.HttpClient(host=host, port=port)
+                client.heartbeat()
+            except Exception as exc:  # noqa: BLE001 - fall back to the local files
+                log.warning("Chroma server %s:%s unavailable (%s); using %s", host, port, exc, chroma_dir)
+                client = None
+            if client is not None:
+                log.info("Vector store: Chroma server at %s:%s", host, port)
+                return cls.from_sources(client, embed, model, sources)
         chroma_dir.mkdir(parents=True, exist_ok=True)
         return cls.from_sources(chromadb.PersistentClient(path=str(chroma_dir)), embed, model, sources)
 
