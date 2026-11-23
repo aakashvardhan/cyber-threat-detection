@@ -1,5 +1,6 @@
-// Thin client for the analyst console API (docs/api/openapi.yaml, v0.7.0).
-// Base URL and key come from .env.local (see .env.example).
+// Thin client for the analyst console API (docs/api/openapi.yaml, v0.7.1).
+// Development: base URL and key come from .env.local (see .env.example).
+// Docker / AWS: the bundle is built with VITE_API_BASE_URL=/api and no key; nginx adds the key server-side.
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
 const API_KEY = import.meta.env.VITE_API_KEY || '';
@@ -12,14 +13,19 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
+function newKey() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function request(method, path, body, extraHeaders = {}) {
   let res;
   try {
     res = await fetch(BASE_URL + path, {
       method,
       headers: {
-        'X-API-Key': API_KEY,
+        ...(API_KEY ? { 'X-API-Key': API_KEY } : {}),
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...extraHeaders,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -31,7 +37,8 @@ async function request(method, path, body) {
   if (!res.ok) {
     const detail = data?.detail;
     const message =
-      res.status === 401 ? 'The API key was rejected. Check VITE_API_KEY in .env.local.'
+      res.status === 401 ? (API_KEY ? 'The API key was rejected. Check VITE_API_KEY in .env.local.'
+        : 'The API key was rejected. Check API_KEY in the server\'s .env.')
       : typeof detail === 'string' ? detail
       : data?.message || `Request failed (${res.status})`;
     throw new ApiError(res.status, message, data);
@@ -61,7 +68,9 @@ export const api = {
   incidentGraph: (id, windowStart) =>
     request('GET', `/incidents/${encodeURIComponent(id)}/graph${windowStart ? `?window_start=${encodeURIComponent(windowStart)}` : ''}`),
   /** Status, technique override, note, mitigations applied. */
-  updateIncident: (id, update) => request('PATCH', `/incidents/${encodeURIComponent(id)}`, update),
+  /** One key per edit: if the request is retried, the backend records the edit once. */
+  updateIncident: (id, update) =>
+    request('PATCH', `/incidents/${encodeURIComponent(id)}`, update, { 'Idempotency-Key': newKey() }),
   /** The incident's follow-up conversation. */
   incidentChat: (id) => request('GET', `/incidents/${encodeURIComponent(id)}/chat`),
   /** Ask a follow-up question; returns the whole conversation with the answer at the end (a few seconds). */

@@ -237,12 +237,19 @@ class AttackGraph:
         return out
 
     def signature(self) -> str:
-        """Changes when the STIX file, the CTI spans or the build code change the graph."""
+        """Changes when anything stored in Neo4j changes: nodes and their properties, relationships and their
+        properties, and the communities (a text-only ATT&CK or CTI update triggers a reload too)."""
         import hashlib
+
+        def canon(value) -> str:
+            return json.dumps(value, sort_keys=True, ensure_ascii=False, default=str)
+
         h = hashlib.sha1()
-        for s, rel, t, _ in sorted(self.edges, key=lambda e: (e[0], e[1], e[2])):
-            h.update(f"{s}|{rel}|{t};".encode())
-        h.update(str(sorted(self.communities)).encode())
+        for node_id in sorted(self.nodes):
+            h.update(f"N{node_id}|{canon(self.nodes[node_id])};".encode())
+        for s, rel, t, props in sorted(self.edges, key=lambda e: (e[0], e[1], e[2], canon(e[3]))):
+            h.update(f"E{s}|{rel}|{t}|{canon(props)};".encode())
+        h.update(canon(sorted(self.communities)).encode())
         return h.hexdigest()
 
     def stats(self) -> dict:
@@ -335,10 +342,15 @@ NEO4J_LABELS = {"Technique", "Tactic", "Group", "Software", "Campaign", "Mitigat
 
 
 def load_into_neo4j(session, graph: AttackGraph, batch: int = 1000) -> dict:
-    """Replace the ATT&CK graph in Neo4j. Every node is :Entity plus its type; a :GraphMeta node keeps the signature."""
-    session.run("CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE").consume()
-    session.run("CREATE INDEX technique_parent IF NOT EXISTS FOR (x:Technique) ON (x.parent)").consume()
-    while session.run("MATCH (e:Entity) WITH e LIMIT 5000 DETACH DELETE e RETURN count(*) AS deleted").single()["deleted"]:
+    """Replace the ATT&CK graph in Neo4j.
+
+    Every node is :AttackEntity plus its type, so only this graph's nodes are ever deleted: other data in the same
+    database is left alone (#60 review). The :GraphMeta signature is removed before anything is deleted and written
+    back only after the whole graph is in, so an interrupted load is never trusted on the next start."""
+    session.run("CREATE CONSTRAINT attack_entity_id IF NOT EXISTS FOR (e:AttackEntity) REQUIRE e.id IS UNIQUE").consume()
+    session.run("CREATE INDEX attack_technique_parent IF NOT EXISTS FOR (x:Technique) ON (x.parent)").consume()
+    session.run("MATCH (m:GraphMeta {name: 'attack'}) DETACH DELETE m").consume()      # invalidate first
+    while session.run("MATCH (e:AttackEntity) WITH e LIMIT 5000 DETACH DELETE e RETURN count(*) AS deleted").single()["deleted"]:
         pass
     by_type: dict[str, list[dict]] = defaultdict(list)
     for node in graph.nodes.values():
@@ -348,7 +360,7 @@ def load_into_neo4j(session, graph: AttackGraph, batch: int = 1000) -> dict:
         if label not in NEO4J_LABELS:
             raise ValueError(f"unexpected node type {label}")
         for i in range(0, len(rows), batch):
-            session.run(f"UNWIND $rows AS row MERGE (e:Entity {{id: row.id}}) SET e += row.props, e:{label}",
+            session.run(f"UNWIND $rows AS row MERGE (e:AttackEntity {{id: row.id}}) SET e += row.props, e:{label}",
                         rows=rows[i:i + batch]).consume()
     by_rel: dict[str, list[dict]] = defaultdict(list)
     for s, rel, t, props in graph.edges:
@@ -358,12 +370,12 @@ def load_into_neo4j(session, graph: AttackGraph, batch: int = 1000) -> dict:
         if not rel.replace("_", "").isalnum():
             raise ValueError(f"unexpected relationship type {rel}")
         for i in range(0, len(rows), batch):
-            session.run(f"UNWIND $rows AS row MATCH (a:Entity {{id: row.s}}) MATCH (b:Entity {{id: row.t}}) "
+            session.run(f"UNWIND $rows AS row MATCH (a:AttackEntity {{id: row.s}}) MATCH (b:AttackEntity {{id: row.t}}) "
                         f"MERGE (a)-[r:{rel}]->(b) SET r += row.props", rows=rows[i:i + batch]).consume()
     session.run("MERGE (m:GraphMeta {name: 'attack'}) SET m.signature = $sig, m.loaded_at = datetime()",
                 sig=graph.signature()).consume()
-    nodes = session.run("MATCH (e:Entity) RETURN count(e) AS total").single()["total"]
-    rels = session.run("MATCH (:Entity)-[r]->(:Entity) RETURN count(r) AS total").single()["total"]
+    nodes = session.run("MATCH (e:AttackEntity) RETURN count(e) AS total").single()["total"]
+    rels = session.run("MATCH (:AttackEntity)-[r]->(:AttackEntity) RETURN count(r) AS total").single()["total"]
     return {"nodes": nodes, "relationships": rels}
 
 
@@ -372,20 +384,20 @@ class Neo4jStore:
     name = "neo4j"
 
     LOCAL = """
-    MATCH (tech:Technique) WHERE tech.parent IN $seeds
+    MATCH (tech:AttackEntity:Technique) WHERE tech.parent IN $seeds
     MATCH (tech)-[r]-()
     RETURN startNode(r).id AS s, type(r) AS rel, endNode(r).id AS t, properties(r) AS props
     """
     ACTORS = """
-    MATCH (actor:Entity)-[r:USES|ATTRIBUTED_TO]->(x:Entity) WHERE actor.id IN $actors
+    MATCH (actor:AttackEntity)-[r:USES|ATTRIBUTED_TO]->(x:AttackEntity) WHERE actor.id IN $actors
       AND (type(r) = 'ATTRIBUTED_TO' OR x:Technique)
     RETURN actor.id AS s, type(r) AS rel, x.id AS t
     """
     AROUND = """
-    MATCH (src:Entity)-[r:ABOUT|USES_DATA]->(x:Entity) WHERE src.id IN $ids
+    MATCH (src:AttackEntity)-[r:ABOUT|USES_DATA]->(x:AttackEntity) WHERE src.id IN $ids
     RETURN src.id AS s, type(r) AS rel, x.id AS t
     """
-    NODES = "MATCH (e:Entity) WHERE e.id IN $ids RETURN e {.*} AS node"
+    NODES = "MATCH (e:AttackEntity) WHERE e.id IN $ids RETURN e {.*} AS node"
 
     def __init__(self, driver, database: str | None = None):
         self.driver = driver
@@ -393,13 +405,13 @@ class Neo4jStore:
 
     @classmethod
     def connect(cls, uri: str, user: str, password: str, database: str | None = None,
-                graph: AttackGraph | None = None, retries: int = 10) -> "Neo4jStore":
+                graph: AttackGraph | None = None, retries: int = 40) -> "Neo4jStore":
         """Connect; with `graph`, (re)load it when Neo4j is empty or holds an older graph."""
         import time as _time
         from neo4j import GraphDatabase
 
         driver = GraphDatabase.driver(uri, auth=(user, password))
-        for attempt in range(retries):          # in docker compose Neo4j may still be starting
+        for attempt in range(retries):          # in docker compose Neo4j may still be starting (up to ~2 min)
             try:
                 driver.verify_connectivity()
                 break
@@ -415,7 +427,7 @@ class Neo4jStore:
             with driver.session(database=database) as session:
                 counts = load_into_neo4j(session, graph)
             log.info("Neo4j now holds %s", counts)
-        elif not store._run("MATCH (x:Technique) RETURN count(x) AS techniques")[0]["techniques"]:
+        elif not store._run("MATCH (x:AttackEntity:Technique) RETURN count(x) AS techniques")[0]["techniques"]:
             raise RuntimeError("Neo4j is reachable but has no ATT&CK graph; run scripts/load_neo4j.py")
         return store
 
@@ -449,7 +461,7 @@ class Neo4jStore:
         return Subgraph(nodes, unique, self.name)
 
     def users(self, technique_id: str) -> set[str]:
-        rows = self._run("MATCH (actor:Entity)-[:USES]->(x:Technique) WHERE x.parent = $p AND NOT actor:Technique "
+        rows = self._run("MATCH (actor:AttackEntity)-[:USES]->(x:AttackEntity:Technique) WHERE x.parent = $p AND NOT actor:Technique "
                          "RETURN DISTINCT actor.id AS actor_id", p=parent_of(technique_id))
         return {r["actor_id"] for r in rows}
 

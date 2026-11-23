@@ -22,7 +22,10 @@ def aws(monkeypatch):
 
 
 def run_replay(client):
-    client.post("/detect", json={"reset": True})
+    reset = client.post("/detect", json={"reset": True})
+    # the reset must really restart the replay (otherwise the tests below would read the unchanged incident)
+    assert reset.status_code == 200
+    assert reset.json()["window_index"] == 1 and reset.json()["already_processed"] is False
     while client.post("/detect", json={}).status_code == 200:
         pass
     return client.get("/incidents").json()["incidents"]
@@ -94,7 +97,9 @@ def test_reset_keeps_saved_edits(make_settings):
     with TestClient(app, headers={"X-API-Key": API_KEY}) as client:
         incident_id = run_replay(client)[0]["incident_id"]
         client.patch(f"/incidents/{incident_id}", json={"status": "closed"})
+        old = app.state.app_state.controller.state
         run_replay(client)                                   # Reset in the console replays from the start
+        assert app.state.app_state.controller.state is not old            # a fresh replay was built
         assert client.get(f"/incidents/{incident_id}").json()["status"] == "closed"
     assert app.state.app_state.store.name == "memory"
 
@@ -102,7 +107,8 @@ def test_reset_keeps_saved_edits(make_settings):
 def test_unreachable_dynamodb_falls_back_to_memory(make_settings, monkeypatch):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "x")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "x")
-    app = create_app(make_settings(incident_store="dynamodb", dynamodb_endpoint="http://127.0.0.1:9"))
+    app = create_app(make_settings(incident_store="dynamodb", dynamodb_endpoint="http://127.0.0.1:9",
+                                   dynamodb_wait_s=0))
     with TestClient(app, headers={"X-API-Key": API_KEY}) as client:
         assert run_replay(client)                            # the console still works
     assert app.state.app_state.store.name == "memory"

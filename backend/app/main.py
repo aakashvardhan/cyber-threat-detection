@@ -1,4 +1,4 @@
-"""Threat Detection Console API (docs/api/openapi.yaml, v0.7.0).
+"""Threat Detection Console API (docs/api/openapi.yaml, v0.7.1).
 
 Run (from backend/): uvicorn app.main:create_app --factory --reload --port 8000
 """
@@ -7,7 +7,8 @@ from __future__ import annotations
 import hmac
 import logging
 import threading
-from dataclasses import dataclass
+from collections import OrderedDict
+from dataclasses import dataclass, field
 
 import pandas as pd
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
@@ -21,7 +22,7 @@ from app.attack_graph import AttackGraph, Neo4jStore, NetworkXStore
 from app.behavior import BehaviorSearch
 from app.graph_rag import GraphRetriever
 from app.rerank import load_reranker
-from app.store import analyst_state, load_store
+from app.store import MAX_ACTIVITY, analyst_state, load_store
 from app.chat import IncidentChat
 from app.explain import ExplanationManager
 from app.graph import window_graph
@@ -54,6 +55,8 @@ class AppState:
     graph_rag: GraphRetriever | None = None
     store: object | None = None        # incident store (memory or DynamoDB)
     chat: IncidentChat | None = None
+    # Idempotency-Key of recent edits -> incident id, so a retried PATCH is recorded once (#61 review)
+    seen_edits: OrderedDict = field(default_factory=OrderedDict)
 
 
 def build_state(settings: Settings) -> AppState:
@@ -69,7 +72,8 @@ def build_state(settings: Settings) -> AppState:
     if settings.rag_mode in ("auto", "vector") and settings.chroma_dir is not None:
         kb.vector = VectorStore.load(settings.knowledge_dir, settings.chroma_dir, settings.embed_model,
                                      settings.attack_stix, behavior.index.docs if behavior.enabled else None,
-                                     host=settings.chroma_host, port=settings.chroma_port)
+                                     host=settings.chroma_host, port=settings.chroma_port,
+                                     wait_s=settings.chroma_wait_s)
         if kb.vector is None and settings.rag_mode == "vector":
             raise RuntimeError("RAG_MODE=vector but the vector store could not be loaded (see the log above)")
         behavior.vector = kb.vector
@@ -270,7 +274,7 @@ def incident_detail(state: AppState, incident: Incident, refresh: bool) -> dict:
 # ------------------------------------------------------------------ app
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Threat Detection Console API", version="0.7.0",
+    app = FastAPI(title="Threat Detection Console API", version="0.7.1",
                   description="Backend for the analyst console (CS/DATA 298B, Team 3).")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allow_headers=["*"])
@@ -382,9 +386,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.patch("/incidents/{incident_id}", response_model=schemas.IncidentSummary, tags=["Incidents"],
                dependencies=[Depends(require_key)],
                responses={401: {"model": schemas.Error}, 404: {"model": schemas.Error}})
-    def update_incident(incident_id: str, update: schemas.IncidentUpdate, state: AppState = Depends(get_state)):
-        with state.edit_lock:
+    def update_incident(incident_id: str, update: schemas.IncidentUpdate, state: AppState = Depends(get_state),
+                        idempotency_key: str | None = Header(default=None, max_length=128)):
+        # the replay lock as well: a Reset waits for the edit (and loads it), or the edit applies to the new replay
+        with state.edit_lock, state.controller.lock:
             incident = find(state, incident_id)
+            if idempotency_key:
+                if state.seen_edits.get(idempotency_key) == incident.incident_id:
+                    return incident_summary(state, incident)       # a retry of an edit already applied
+                state.seen_edits[idempotency_key] = incident.incident_id
+                while len(state.seen_edits) > 1000:
+                    state.seen_edits.popitem(last=False)
             changed = update.model_fields_set
             if "status" in changed and update.status is not None:
                 incident.status = update.status
@@ -400,6 +412,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if "mitigations_applied" in changed:
                 entry["mitigations_applied"] = incident.mitigations_applied
             incident.activity.append(entry)
+            del incident.activity[:-MAX_ACTIVITY]                 # bounded, so the saved item stays small
             if state.store is not None:
                 state.store.save(state.detector.name, incident.incident_id, analyst_state(incident))
             return incident_summary(state, incident)

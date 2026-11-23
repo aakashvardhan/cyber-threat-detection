@@ -7,7 +7,7 @@ Run from the backend folder, with Neo4j running (docker compose up neo4j) and NE
     python scripts/load_neo4j.py            # replaces the graph in the database
     python scripts/load_neo4j.py --check    # also compares Neo4j retrieval with the in-memory graph
 
-Every node gets the label :Entity plus its type (:Technique, :Group, ...); relationships keep the ATT&CK
+Every node gets the label :AttackEntity plus its type (:Technique, :Group, ...); relationships keep the ATT&CK
 names (USES, MITIGATES, ...). The backend then queries Neo4j when NEO4J_URI is set.
 """
 from __future__ import annotations

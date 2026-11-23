@@ -22,7 +22,9 @@ npm run dev
 
 Port 5173 is already allowed in the backend's `CORS_ORIGINS`.
 
-`npm run build` writes a static site to `dist/` for deployment. Set `VITE_API_BASE_URL` to the deployed backend before building.
+`npm run build` writes a static site to `dist/`. For deployment use the Docker image (`frontend/Dockerfile`): it builds
+with `VITE_API_BASE_URL=/api` and no key, and its nginx adds the key when it proxies `/api` to the backend, so the key
+is never in the browser bundle (see DEPLOYMENT.md).
 
 ## What is built
 

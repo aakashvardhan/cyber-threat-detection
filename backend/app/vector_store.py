@@ -93,7 +93,8 @@ class VectorStore:
     # ----- building -----
     @classmethod
     def load(cls, knowledge_dir: Path | None, chroma_dir: Path, model: str, stix_path: Path | None = None,
-             technique_docs: dict | None = None, host: str | None = None, port: int = 8000) -> "VectorStore | None":
+             technique_docs: dict | None = None, host: str | None = None, port: int = 8000,
+             wait_s: float = 0.0) -> "VectorStore | None":
         try:
             import chromadb
             from sentence_transformers import SentenceTransformer
@@ -124,36 +125,57 @@ class VectorStore:
                                       "metadata": {"technique_ids": [t], "name": d["name"]}} for t, d in technique_docs.items()]
 
         if host:            # Chroma server (docker compose / AWS)
-            try:
-                client = chromadb.HttpClient(host=host, port=port)
-                client.heartbeat()
-            except Exception as exc:  # noqa: BLE001 - fall back to the local files
-                log.warning("Chroma server %s:%s unavailable (%s); using %s", host, port, exc, chroma_dir)
-                client = None
+            deadline, delay = time.monotonic() + max(wait_s, 0.0), 1.0
+            while True:     # Chroma may still be starting: the backend no longer waits for its health check
+                try:
+                    client = chromadb.HttpClient(host=host, port=port)
+                    client.heartbeat()
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    if time.monotonic() + delay > deadline:
+                        log.warning("Chroma server %s:%s unavailable (%s); using %s", host, port, exc, chroma_dir)
+                        client = None
+                        break
+                    time.sleep(delay)
+                    delay = min(delay * 2, 5.0)
             if client is not None:
-                log.info("Vector store: Chroma server at %s:%s", host, port)
-                return cls.from_sources(client, embed, model, sources)
+                try:
+                    store = cls.from_sources(client, embed, model, sources)
+                    log.info("Vector store: Chroma server at %s:%s", host, port)
+                    return store
+                except Exception as exc:  # noqa: BLE001 - any server-side failure: use the local index instead
+                    log.warning("Chroma server %s:%s failed while building or reading the index (%s: %s); using %s",
+                                host, port, type(exc).__name__, exc, chroma_dir)
         chroma_dir.mkdir(parents=True, exist_ok=True)
         return cls.from_sources(chromadb.PersistentClient(path=str(chroma_dir)), embed, model, sources)
 
     @classmethod
     def from_sources(cls, client, embed, model: str, sources: dict[str, list[dict]]) -> "VectorStore":
-        """Create or reuse one collection per source; a collection is rebuilt when its chunk IDs or the model change."""
+        """Create or reuse one collection per source.
+
+        A collection is reused only if its signature matches (model, every chunk's ID, text and metadata) AND it holds
+        every chunk; otherwise it is rebuilt. So edited chunk text is re-embedded, and a build that was interrupted
+        (backend or Chroma stopped half-way) is not trusted on the next start."""
         existing = {c.name: c for c in client.list_collections()}
         counts: dict[str, Counter] = {}
         for name, chunks in sources.items():
             if not chunks:
                 continue
-            signature = hashlib.sha1((model + "|" + "|".join(c["id"] for c in chunks)).encode()).hexdigest()
+            seen = set()
+            unique = [c for c in chunks if not (c["id"] in seen or seen.add(c["id"]))]
+            h = hashlib.sha1(model.encode())
+            for c in unique:
+                h.update(("|" + c["id"] + "\x1f" + c["text"] + "\x1f"
+                          + json.dumps(_meta(c.get("metadata", {})), sort_keys=True)).encode())
+            signature = h.hexdigest()
             col = existing.get(name)
-            if col is None or (col.metadata or {}).get("signature") != signature:
+            complete = col is not None and (col.metadata or {}).get("signature") == signature and col.count() == len(unique)
+            if not complete:
                 if col is not None:
                     client.delete_collection(name)
                 started = time.time()
                 log.info("Building vector index '%s' (%d chunks); this runs once", name, len(chunks))
                 col = client.create_collection(name, metadata={"hnsw:space": "cosine", "signature": signature, "embed_model": model})
-                seen = set()
-                unique = [c for c in chunks if not (c["id"] in seen or seen.add(c["id"]))]
                 for i in range(0, len(unique), 1000):
                     part = unique[i:i + 1000]
                     col.add(ids=[c["id"] for c in part], documents=[c["text"] for c in part],

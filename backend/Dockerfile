@@ -23,10 +23,11 @@ RUN pip install --index-url https://download.pytorch.org/whl/cpu torch \
 
 # Embedding model baked into the image, so the container starts without downloading it
 ARG EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBED_MODEL}')"
+# the model name is passed as an argument, never pasted into Python source (#60 review)
+RUN python -c 'import sys; from sentence_transformers import SentenceTransformer; SentenceTransformer(sys.argv[1])' "$EMBED_MODEL"
 # Reranker (RERANK_MODEL in the backend environment must match; RERANK=false turns it off)
 ARG RERANK_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
-RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('${RERANK_MODEL}')"
+RUN python -c 'import sys; from sentence_transformers import CrossEncoder; CrossEncoder(sys.argv[1])' "$RERANK_MODEL"
 
 COPY backend/ .
 
@@ -35,6 +36,8 @@ RUN useradd --create-home --uid 1000 app && chown -R app /app
 USER app
 
 EXPOSE 8000
-HEALTHCHECK --interval=15s --timeout=5s --start-period=120s --retries=5 \
+# the first start builds the Chroma index (~10 min on 2 vCPU) before /health answers; failures during the start
+# period do not count, so the container is not marked unhealthy while it indexes
+HEALTHCHECK --interval=15s --timeout=5s --start-period=900s --retries=5 \
     CMD curl -fs http://localhost:8000/health || exit 1
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
