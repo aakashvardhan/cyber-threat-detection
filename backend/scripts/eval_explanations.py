@@ -25,13 +25,16 @@ sys.path.insert(0, str(HERE))
 def load_env(path: Path) -> None:
     for name in [k for k in os.environ if k.startswith("LLM_")]:
         del os.environ[name]                      # same as start-backend.ps1: .env decides the LLM
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            os.environ[key.strip()] = value.strip()
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip()
+    # the scripts run the app in this process only (no port is opened), so any key will do when none is set
+    if not os.environ.get("API_KEY"):
+        import secrets
+        os.environ["API_KEY"] = secrets.token_hex(16)
 
 
 def main() -> None:

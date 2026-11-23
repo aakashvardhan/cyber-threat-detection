@@ -238,11 +238,28 @@ def test_load_into_neo4j_sends_every_node_edge_and_the_signature(graph):
     session = RecordingSession()
     load_into_neo4j(session, graph)
     queries = [q for q, _ in session.calls]
-    assert any("CREATE CONSTRAINT entity_id" in q for q in queries)
-    sent_nodes = sum(len(p["rows"]) for q, p in session.calls if "MERGE (e:Entity" in q)
+    assert any("CREATE CONSTRAINT attack_entity_id" in q for q in queries)
+    # only this graph's nodes are deleted, never other data in the database (#60 review)
+    deletes = [i for i, q in enumerate(queries) if "DELETE" in q]
+    assert all(":AttackEntity" in queries[i] or "GraphMeta" in queries[i] for i in deletes)
+    assert not any("(e:Entity)" in q for q in queries)
+    # the old signature goes first, the new one only after every node and relationship is written
+    drop_meta = next(i for i, q in enumerate(queries) if "GraphMeta" in q and "DELETE" in q)
+    set_meta = next(i for i, q in enumerate(queries) if "GraphMeta" in q and "SET m.signature" in q)
+    writes = [i for i, q in enumerate(queries) if "MERGE (e:AttackEntity" in q or "MERGE (a)-[r:" in q]
+    assert drop_meta < min(deletes + writes) or drop_meta == min(deletes)
+    assert set_meta > max(writes)
+    sent_nodes = sum(len(p["rows"]) for q, p in session.calls if "MERGE (e:AttackEntity" in q)
     sent_edges = sum(len(p["rows"]) for q, p in session.calls if "MERGE (a)-[r:" in q)
     assert sent_nodes == len(graph.nodes) and sent_edges == len(graph.edges)
-    meta = next(p for q, p in session.calls if "GraphMeta" in q)
+    meta = next(p for q, p in session.calls if "GraphMeta" in q and "SET m.signature" in q)
     assert meta["sig"] == graph.signature()
     describes = next(p for q, p in session.calls if "[r:DESCRIBES]" in q)["rows"][0]["props"]
     assert isinstance(describes["chunks"], str)            # lists of dicts are stored as JSON text
+
+
+def test_signature_changes_with_text_only_updates(graph):
+    before = graph.signature()
+    node = next(iter(graph.nodes.values()))
+    node["name"] = node.get("name", "") + " (renamed)"                    # same IDs and relationships, new text
+    assert graph.signature() != before

@@ -3,9 +3,13 @@
 #   cp .env.example .env            # then set NEO4J_PASSWORD, API_KEY and (optional) GROQ_API_KEY
 #   docker compose up -d --build    # first build takes a while (PyTorch, embedding model)
 #
-#   Console          http://localhost:8080
-#   API              http://localhost:8000/docs
-#   Neo4j Browser    http://localhost:7474   (user neo4j, password NEO4J_PASSWORD)
+#   Console          http://localhost:8080        (the only service meant for users; the API is at /api behind it)
+#   API              http://localhost:8000/docs   (this machine only)
+#   Neo4j Browser    http://localhost:7474        (this machine only; user neo4j, password NEO4J_PASSWORD)
+#
+# Only the console port is published to the network. The backend, Neo4j, Chroma and DynamoDB Local are bound to
+# 127.0.0.1 (for debugging on the host) and otherwise reachable only on the compose network. Chroma and DynamoDB
+# Local have no authentication, so never publish their ports.
 #
 # Data that is not in the images is mounted from backend/data (checkpoints, test edges, knowledge files,
 # metrics.json); see backend/README.md, "Run with Docker". On AWS the same files come from S3.
@@ -18,8 +22,8 @@ services:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env (8+ characters)}
       NEO4J_server_memory_heap_max__size: 1G
     ports:
-      - "7474:7474"   # Neo4j Browser
-      - "7687:7687"   # Bolt
+      - "127.0.0.1:7474:7474"   # Neo4j Browser
+      - "127.0.0.1:7687:7687"   # Bolt
     volumes:
       - neo4j-data:/data
     healthcheck:
@@ -34,7 +38,7 @@ services:
     volumes:
       - chroma-data:/data
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
 
   dynamodb:
     image: amazon/dynamodb-local:latest
@@ -43,7 +47,7 @@ services:
     volumes:
       - dynamodb-data:/home/dynamodblocal/data
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
 
   backend:
     build:
@@ -64,34 +68,42 @@ services:
       CHROMA_PORT: "8000"
       INCIDENT_STORE: dynamodb
       DYNAMODB_TABLE: threat-console-incidents
-      DYNAMODB_ENDPOINT: http://dynamodb:8000
+      # DynamoDB Local by default. On AWS set DYNAMODB_ENDPOINT= (empty) in .env: the backend then uses the real
+      # service with the instance role. Local mode needs no credentials (the backend uses dummy ones for it).
+      DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT-http://dynamodb:8000}
+      DYNAMODB_CREATE_TABLE: ${DYNAMODB_CREATE_TABLE:-true}
       AWS_REGION: ${AWS_REGION:-us-west-2}
-      AWS_ACCESS_KEY_ID: local          # DynamoDB Local accepts any key; on AWS the instance role is used
-      AWS_SECRET_ACCESS_KEY: local
-      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      # the browser reaches the API through the console's /api proxy (same origin); these are for local dev servers
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
       # the ATT&CK STIX file, if it is not in backend/data/knowledge
       ATTACK_STIX: ${ATTACK_STIX:-/app/demo/2026-10-06_meeting/app/data/rag/enterprise-attack.json}
     volumes:
       - ./backend/data:/app/backend/data
       - ./demo/2026-10-06_meeting/app/data/rag:/app/demo/2026-10-06_meeting/app/data/rag:ro
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    # started, not healthy: Neo4j and Chroma are optional (the backend waits for them for a while and otherwise
+    # falls back to the in-memory graph and the local index), so their outage must not keep the API down
     depends_on:
       neo4j:
-        condition: service_healthy
+        condition: service_started
       chroma:
-        condition: service_healthy
+        condition: service_started
       dynamodb:
         condition: service_started
 
   frontend:
     build:
       context: ./frontend
-      args:
-        VITE_API_BASE_URL: ${PUBLIC_API_URL:-http://localhost:8000}
-        VITE_API_KEY: ${API_KEY}
+    environment:
+      # nginx adds the key when it proxies /api to the backend; it is not in the browser bundle
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      BACKEND_URL: http://backend:8000
+      # optional login for the console (recommended on AWS)
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
     ports:
-      - "8080:80"
+      - "${CONSOLE_PORT:-8080}:80"
     depends_on:
       - backend
 

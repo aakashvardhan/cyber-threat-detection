@@ -14,6 +14,27 @@ DEMO_DATA = REPO_ROOT / "demo" / "2026-10-06_meeting" / "app" / "data"
 BUNDLED_DATA = Path(__file__).resolve().parent / "data"
 
 
+def _required_api_key() -> str:
+    """No built-in default: a container started without API_KEY must not accept a well-known key (#60 review)."""
+    key = _env("API_KEY")
+    if not key:
+        raise ValueError("API_KEY is not set. Put a long random value in backend/.env (local) or the compose .env.")
+    if len(key) < 8:
+        raise ValueError("API_KEY is too short; use at least 8 characters")
+    return key
+
+
+INCIDENT_STORES = ("memory", "dynamodb")
+
+
+def _incident_store(value: str) -> str:
+    """A typo must not silently turn persistence off (#61 review)."""
+    store = value.strip().lower()
+    if store not in INCIDENT_STORES:
+        raise ValueError(f"INCIDENT_STORE must be one of {', '.join(INCIDENT_STORES)}, not {value!r}")
+    return store
+
+
 def _env(name: str, default: str | None = None) -> str | None:
     value = os.environ.get(name)
     return value if value not in (None, "") else default
@@ -72,6 +93,8 @@ class Settings:
     dynamodb_endpoint: str | None = None      # DynamoDB Local (docker compose); unset = the AWS service
     aws_region: str = "us-west-2"
     dynamodb_create_table: bool = True        # create the table when it is missing (set false on AWS if IAM forbids it)
+    dynamodb_wait_s: float = 30.0
+    chroma_wait_s: float = 0.0                # docker compose sets CHROMA_WAIT_S: wait for the Chroma server to start             # keep retrying the first connection this long (DynamoDB Local starting)
     behavior_check: bool = True
     gnn_explainer: bool = True               # GNNExplainer for the GraphSAGE detector (incident page)
     gnn_explainer_epochs: int = 100
@@ -113,7 +136,7 @@ class Settings:
 
         threshold = _env("THRESHOLD")
         return cls(
-            api_key=_env("API_KEY", "dev-key"),
+            api_key=_required_api_key(),
             data_dir=data_dir,
             replay_file=path("REPLAY_FILE", data_dir / "test_edges.parquet",
                              DEMO_DATA / "test_edges_5min_enriched.parquet"),
@@ -144,11 +167,13 @@ class Settings:
             neo4j_password=_env("NEO4J_PASSWORD"),
             neo4j_database=_env("NEO4J_DATABASE"),
             neo4j_autoload=_flag("NEO4J_AUTOLOAD", True),
-            incident_store=_env("INCIDENT_STORE", "memory").lower(),
+            incident_store=_incident_store(_env("INCIDENT_STORE", "memory")),
             dynamodb_table=_env("DYNAMODB_TABLE", "threat-console-incidents"),
             dynamodb_endpoint=_env("DYNAMODB_ENDPOINT"),
             aws_region=_env("AWS_REGION", _env("AWS_DEFAULT_REGION", "us-west-2")),
             dynamodb_create_table=_flag("DYNAMODB_CREATE_TABLE", True),
+            dynamodb_wait_s=float(_env("DYNAMODB_WAIT_S", "30")),
+            chroma_wait_s=float(_env("CHROMA_WAIT_S", "60")),
             behavior_check=_flag("BEHAVIOR_CHECK", True),
             gnn_explainer=_flag("GNN_EXPLAINER", True),
             gnn_explainer_epochs=int(_env("GNN_EXPLAINER_EPOCHS", "100")),

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Threat Detection Console API
-  version: 0.7.0
+  version: 0.7.1
   description: |
     Backend API for the analyst console (CS/DATA 298B, Team 3).
 
@@ -305,6 +305,14 @@ paths:
         for a single-user demo. Only the fields present in the body change; others are kept. Each
         call appends an entry to the incident's `activity` log, and the saved `technique_override`
         and `mitigations_applied` are returned in the incident summary and detail.
+        Send a new `Idempotency-Key` with each edit: a retry with the same key is not recorded twice.
+        The activity log keeps the last 200 entries.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, maxLength: 128 }
+          description: Unique per edit (e.g. a UUID); a repeated key returns the incident without changing it
       requestBody:
         required: true
         content:

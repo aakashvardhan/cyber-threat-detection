@@ -1,8 +1,14 @@
 """Create (or clear) the DynamoDB table that keeps incident state (SJSU-131).
 
-    python scripts/create_tables.py                  # create the table if it is missing
-    python scripts/create_tables.py --clear          # delete every saved incident (all models)
-    python scripts/create_tables.py --clear --model graphsage
+Works from any folder (paths below are from the repository root; inside the backend container use
+`docker compose run --rm backend python scripts/create_tables.py`):
+
+    python backend/scripts/create_tables.py                        # create the table if it is missing
+    python backend/scripts/create_tables.py --clear --yes          # delete every saved incident (all models)
+    python backend/scripts/create_tables.py --clear --yes --model graphsage
+
+Stop the backend before --clear (`docker compose stop backend`): it writes while the table is being scanned, so a
+running backend could keep or recreate items. --clear refuses to run without --yes.
 
 Reads DYNAMODB_TABLE, AWS_REGION and DYNAMODB_ENDPOINT (set it for DynamoDB Local, leave it unset on AWS).
 Table: partition key `model` (string), sort key `incident_id` (string), on-demand billing.
@@ -22,7 +28,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--clear", action="store_true", help="delete saved incident state")
     parser.add_argument("--model", default=None, help="with --clear: only this live model (e.g. graphsage, hgt)")
+    parser.add_argument("--yes", action="store_true", help="with --clear: confirm that the backend is stopped")
     args = parser.parse_args()
+    if args.clear and not args.yes:
+        sys.exit("--clear deletes saved incident state. Stop the backend first (docker compose stop backend), "
+                 "then run again with --yes.")
     from eval_explanations import load_env
     load_env(HERE / ".env")
     from app.config import Settings

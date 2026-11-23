@@ -22,6 +22,7 @@ import time
 
 from app.explain import Redactor, incident_brief, parse_llm_json
 from app.incidents import Incident
+from app.store import chat_state
 from app.timeutil import now_iso
 
 log = logging.getLogger(__name__)
@@ -164,4 +165,4 @@ class IncidentChat:
 
     def save(self, incident: Incident) -> None:
         if self.store is not None and self.model_name():
-            self.store.save(self.model_name(), incident.incident_id, {"chat": incident.chat})
+            self.store.save(self.model_name(), incident.incident_id, chat_state(incident))

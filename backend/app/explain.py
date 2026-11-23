@@ -8,6 +8,7 @@ Providers (LLM_PROVIDER):
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import re
@@ -18,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 from app.behavior import BehaviorSearch, event_fields, incident_features
-from app.store import explanation_state
+from app.store import explanation_state, fingerprint
 from app.config import Settings
 from app.incidents import Incident
 from app.knowledge import KnowledgeBase
@@ -224,15 +225,25 @@ class ExplanationManager:
         self.client = client or LLMClient(settings)
         self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="explain")
         self.lock = threading.Lock()
-        self.running: set[str] = set()
+        self.running: set[tuple] = set()          # (model, incident_id, fingerprint) of jobs in flight
+        self.waiting: dict[tuple, list] = {}      # incidents re-created (Reset) while their job was running
         self.store = None            # incident store: ready explanations are saved there
         self.model_name = lambda: None
+
+    def _key(self, incident: Incident, model: str | None = None) -> tuple:
+        return (model if model is not None else self.model_name(), incident.incident_id, fingerprint(incident))
 
     def view(self, incident: Incident, refresh: bool = False) -> dict:
         """Current explanation for the incident; starts a job on the first call or on refresh."""
         with self.lock:
-            busy = incident.incident_id in self.running
-            if incident.explanation is None or (refresh and not busy):
+            key = self._key(incident)
+            busy = key in self.running
+            if incident.explanation is None and busy:
+                # the same incident was re-created by a Reset while its job runs: wait for that job, don't start another
+                incident.explanation = {"status": "generating", "based_on_edge_count": incident.edge_count,
+                                        "_technique": incident.effective_technique, "sentences": [], "next_steps": []}
+                self.waiting.setdefault(key, []).append(incident)
+            elif incident.explanation is None or (refresh and not busy):
                 self._start(incident)
             explanation = dict(incident.explanation)
         technique = explanation.pop("_technique", None)
@@ -268,8 +279,9 @@ class ExplanationManager:
         incident.explanation = {"status": "generating", "started_at": now_iso(),
                                 "based_on_edge_count": incident.edge_count, "_technique": brief["technique_id"],
                                 "sentences": [], "next_steps": []}
-        self.running.add(incident.incident_id)
-        self.pool.submit(self._run, incident, brief, list(retrieval.evidence))
+        key = self._key(incident)            # the model is captured now: a model switch must not relabel the result
+        self.running.add(key)
+        self.pool.submit(self._run, incident, brief, list(retrieval.evidence), key)
 
     def _history(self, incident: Incident) -> list[dict]:
         """Earlier incidents from the same source (only ones that ended before this one started)."""
@@ -292,7 +304,8 @@ class ExplanationManager:
             log.exception("Could not compute traffic features for %s", incident.incident_id)
             return None
 
-    def _run(self, incident: Incident, brief: dict, evidence: list[dict]) -> None:
+    def _run(self, incident: Incident, brief: dict, evidence: list[dict], key: tuple | None = None) -> None:
+        key = key or self._key(incident)
         started = time.perf_counter()
         mitigations = self.kb.mitigations_for(brief["technique_id"])
         result, mode, model, message = None, "fallback", None, None
@@ -326,10 +339,19 @@ class ExplanationManager:
         with self.lock:
             incident.explanation = {**incident.explanation, **update}
             incident.explanation.pop("started_at", None)
-            self.running.discard(incident.incident_id)
+            self.running.discard(key)
             ready = incident.explanation.get("status") == "ready"
-        if ready and self.store is not None and self.model_name():
-            self.store.save(self.model_name(), incident.incident_id, explanation_state(incident))
+            # the snapshot is taken under the lock, so a refresh starting right after cannot be saved over it
+            snapshot = explanation_state(incident)
+            for other in self.waiting.pop(key, []):
+                if other is not incident and fingerprint(other) == key[2]:
+                    other.explanation = copy.deepcopy(snapshot["explanation"])
+                    other.evidence = copy.deepcopy(snapshot["evidence"])
+                    other.retrieval_trace = copy.deepcopy(snapshot["retrieval_trace"])
+                    other.cve_status = snapshot["cve_status"]
+        model = key[0]
+        if ready and self.store is not None and model:
+            self.store.save(model, incident.incident_id, snapshot)
 
     def wait_idle(self, timeout: float = 10.0) -> None:
         """Test helper: block until no explanation job is running."""

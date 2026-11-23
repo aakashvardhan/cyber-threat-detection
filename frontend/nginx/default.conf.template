@@ -1,0 +1,48 @@
+# Rendered at container start by the nginx image (envsubst on /etc/nginx/templates/*.template):
+# ${API_KEY} and ${BACKEND_URL} come from the container environment. Variables written $like_this are nginx's own.
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # optional login for the whole console (BASIC_AUTH_USER / BASIC_AUTH_PASSWORD; see 15-basic-auth.sh)
+    include /etc/nginx/auth.conf;
+
+    # The browser calls /api/...; nginx adds the shared API key here, on the server, so the key never reaches the
+    # browser bundle (#60 review: "Shared API key is exposed"). The backend itself is not published to the internet.
+    location /api/ {
+        proxy_pass ${BACKEND_URL}/;
+        proxy_set_header X-API-Key "${API_KEY}";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;            # incident chat waits for the LLM
+        client_max_body_size 64k;
+    }
+
+    # container health check (no login, no backend call)
+    location = /healthz {
+        auth_basic off;
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # single-page app: unknown paths (/incidents/INC-0001, /evaluation, ...) load index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # hashed build assets can be cached for a long time; index.html never
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+}
