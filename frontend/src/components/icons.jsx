@@ -21,9 +21,6 @@ export const OverviewIcon = () => (
 export const IncidentsIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" {...stroke}><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4M12 17.5v.5" /></svg>
 );
-export const ReportIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" {...stroke}><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 13h7M9 17h7" /></svg>
-);
 export const ChartIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" {...stroke}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
 );

@@ -16,7 +16,6 @@ export default function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/incidents" element={<Incidents />} />
           <Route path="/incidents/:id" element={<IncidentDetail />} />
-          <Route path="/reports" element={<ComingNext title="Reports" what="Printable investigation reports built from incident data." />} />
           <Route path="/evaluation" element={<Evaluation />} />
           <Route path="/knowledge-base" element={<KnowledgeBase />} />
           <Route path="*" element={<ComingNext title="Page not found" what="Use the menu to go back." />} />

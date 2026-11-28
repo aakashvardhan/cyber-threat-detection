@@ -33,7 +33,8 @@ is never in the browser bundle (see DEPLOYMENT.md).
 | Overview | `/` | Built. Replay controls, key numbers, needs review, traffic, techniques |
 | Incidents | `/incidents` | Built. Update banner, status tabs, filters, bulk confirm/dismiss, CSV export |
 | Incident detail | `/incidents/:id` | Built. Triage, Response and Research tabs, status workflow, technique override, notes |
-| Reports, Evaluation, Knowledge base | `/reports`, `/evaluation`, `/knowledge-base` | Placeholder, next round |
+| Evaluation | `/evaluation` | Built. Model comparison, RAG evaluation, metrics download |
+| Knowledge base | `/knowledge-base` | Built. ATT&CK, CTI-HAL and CVE sources |
 
 ## End-to-end tests
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useReplay } from '../state/ReplayContext.jsx';
-import { BookIcon, ChartIcon, IncidentsIcon, Logo, OverviewIcon, ReportIcon } from './icons.jsx';
+import { BookIcon, ChartIcon, IncidentsIcon, Logo, OverviewIcon } from './icons.jsx';
 
 function monthYear(iso) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -89,7 +89,6 @@ export default function Sidebar() {
         <IncidentsIcon />Incidents
         {awaiting > 0 && <span className="badge" aria-label={`${awaiting} awaiting review`}>{awaiting}</span>}
       </NavLink>
-      <NavLink to="/reports"><ReportIcon />Reports</NavLink>
       <div className="nav-group">Research</div>
       <NavLink to="/evaluation"><ChartIcon />Evaluation</NavLink>
       <NavLink to="/knowledge-base"><BookIcon />Knowledge base</NavLink>
